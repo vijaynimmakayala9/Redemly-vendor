@@ -12,8 +12,6 @@ import {
   Cell,
   PieChart,
   Pie,
-  LineChart,
-  Line,
   AreaChart,
   Area
 } from "recharts";
@@ -24,8 +22,11 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [feedbackUsers, setFeedbackUsers] = useState({});
+  const [currentCustomerPage, setCurrentCustomerPage] = useState(1);
 
   const navigate = useNavigate();
+
+  const customersPerPage = 5;
 
   // Color palettes
   const barColors = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD", "#98D8C8"];
@@ -89,10 +90,15 @@ const Dashboard = () => {
     for (const feedback of feedbacks) {
       if (feedback.userId) {
         try {
-          const response = await fetch(`https://api.redemly.com/api/admin/getsingleuser/${feedback.userId}`);
+          // Handle userId whether it's string or object
+          const userId = typeof feedback.userId === 'string' 
+            ? feedback.userId 
+            : feedback.userId._id || feedback.userId.id || String(feedback.userId);
+            
+          const response = await fetch(`https://api.redemly.com/api/admin/getsingleuser/${userId}`);
           if (response.ok) {
             const userData = await response.json();
-            usersMap[feedback.userId] = userData.user;
+            usersMap[userId] = userData.user;
           }
         } catch (err) {
           console.warn(`Failed to fetch user details for userId ${feedback.userId}:`, err);
@@ -118,7 +124,7 @@ const Dashboard = () => {
     }
 
     const statusCounts = dashboardData.topCoupons.reduce((acc, coupon) => {
-      const status = coupon.status || "unknown";
+      const status = (coupon.status || "unknown").toLowerCase();
       if (!acc[status]) {
         acc[status] = 0;
       }
@@ -138,26 +144,16 @@ const Dashboard = () => {
     if (!data || !Array.isArray(data)) return [];
     return data.map(item => ({
       ...item,
-      name: item.day
-    }));
-  };
-
-  // Format monthly revenue data
-  const formatMonthlyRevenue = (data) => {
-    if (!data || !Array.isArray(data)) return [];
-    return data.map(item => ({
-      ...item,
-      name: item.week
+      name: item.day || "Day"
     }));
   };
 
   // Calculate today's stats
   const calculateTodayStats = () => {
-    if (!dashboardData) return { downloads: 0, redemptions: 0, revenue: 0 };
+    if (!dashboardData) return { downloads: 0, redemptions: 0 };
     return {
       downloads: dashboardData.todayStats?.downloadsToday || 0,
-      redemptions: dashboardData.todayStats?.redemptionsToday || 0,
-      revenue: dashboardData.todayStats?.revenueToday || 0
+      redemptions: dashboardData.todayStats?.redemptionsToday || 0
     };
   };
 
@@ -179,25 +175,104 @@ const Dashboard = () => {
     };
   };
 
-  // Get user details for a feedback item
+  // Get user details for a feedback item - SAFE VERSION
   const getUserDetails = (feedback) => {
-    if (feedback.userId && feedbackUsers[feedback.userId]) {
-      return feedbackUsers[feedback.userId];
+    try {
+      if (!feedback || !feedback.userId) return null;
+      
+      // Extract userId safely
+      let userId;
+      if (typeof feedback.userId === 'string') {
+        userId = feedback.userId;
+      } else if (feedback.userId._id) {
+        userId = feedback.userId._id;
+      } else if (feedback.userId.id) {
+        userId = feedback.userId.id;
+      } else {
+        userId = String(feedback.userId);
+      }
+      
+      return feedbackUsers[userId] || null;
+    } catch (err) {
+      console.warn('Error getting user details:', err);
+      return null;
     }
-    return null;
+  };
+
+  // Get user initial safely
+  const getUserInitial = (feedback, userDetails) => {
+    try {
+      if (userDetails?.name) {
+        return userDetails.name.charAt(0).toUpperCase();
+      }
+      
+      // Try to get initial from userId
+      if (feedback.userId) {
+        const userIdStr = typeof feedback.userId === 'string' 
+          ? feedback.userId 
+          : feedback.userId._id || feedback.userId.id || String(feedback.userId);
+        return userIdStr.charAt(0).toUpperCase();
+      }
+      
+      return "A";
+    } catch (err) {
+      console.warn('Error getting user initial:', err);
+      return "U";
+    }
   };
 
   // Format date for display
   const formatDate = (dateString) => {
     if (!dateString) return "Recently";
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+    } catch (err) {
+      console.warn('Error formatting date:', err);
+      return "Recently";
+    }
   };
 
+  // Get shortened userId for display
+  const getShortenedUserId = (feedback) => {
+    try {
+      if (!feedback.userId) return "Unknown User";
+      
+      let userIdStr;
+      if (typeof feedback.userId === 'string') {
+        userIdStr = feedback.userId;
+      } else if (feedback.userId._id) {
+        userIdStr = feedback.userId._id;
+      } else if (feedback.userId.id) {
+        userIdStr = feedback.userId.id;
+      } else {
+        userIdStr = String(feedback.userId);
+      }
+      
+      return `User ${userIdStr.substring(0, 6)}...`;
+    } catch (err) {
+      return "Unknown User";
+    }
+  };
+
+  // Get customer insights data from backend
+  const getCustomerInsightsData = () => {
+    if (!dashboardData?.customerInsights || !Array.isArray(dashboardData.customerInsights)) return [];
+    
+    return dashboardData.customerInsights.map((customer, index) => ({
+      id: customer._id || index,
+      name: customer.name || "Unknown Customer",
+      email: customer.email || "N/A",
+      profileImage: customer.profileImage || "",
+      couponsUsed: customer.couponsUsed || 0
+    }));
+  };
+
+  // Render loading state
   if (loading) return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-green-50">
       <div className="text-center">
@@ -207,6 +282,7 @@ const Dashboard = () => {
     </div>
   );
 
+  // Render error state
   if (error) return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-green-50">
       <div className="bg-white p-8 rounded-2xl shadow-lg max-w-md text-center">
@@ -223,14 +299,34 @@ const Dashboard = () => {
     </div>
   );
 
-  if (!dashboardData) return null;
+  if (!dashboardData) return (
+    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-green-50">
+      <div className="text-center">
+        <div className="text-gray-400 text-5xl mb-4">📊</div>
+        <h3 className="text-xl font-bold text-gray-800 mb-2">No Data Available</h3>
+        <p className="text-gray-600 mb-4">Unable to load dashboard data</p>
+        <button
+          onClick={fetchDashboardData}
+          className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:from-blue-600 hover:to-blue-700 transition-all"
+        >
+          Try Again
+        </button>
+      </div>
+    </div>
+  );
 
   const todayStats = calculateTodayStats();
   const totals = calculateTotals();
   const couponStatusData = calculateCouponStatus();
-  const weeklyDownloads = formatWeeklyData(dashboardData.charts?.weeklyDownloads);
-  const weeklyRedemptions = formatWeeklyData(dashboardData.charts?.weeklyRedemptions);
-  const monthlyRevenue = formatMonthlyRevenue(dashboardData.charts?.monthlyRevenue);
+  const weeklyDownloads = formatWeeklyData(dashboardData.charts?.weeklyDownloads || []);
+  const weeklyRedemptions = formatWeeklyData(dashboardData.charts?.weeklyRedemptions || []);
+  
+  // Get customer insights data
+  const customerInsightsData = getCustomerInsightsData();
+  const indexOfLastCustomer = currentCustomerPage * customersPerPage;
+  const indexOfFirstCustomer = indexOfLastCustomer - customersPerPage;
+  const currentCustomers = customerInsightsData.slice(indexOfFirstCustomer, indexOfLastCustomer);
+  const totalCustomerPages = Math.ceil(customerInsightsData.length / customersPerPage);
 
   return (
     <div className="p-4 md:p-6 bg-gradient-to-br from-blue-50 via-white to-green-50 min-h-screen">
@@ -272,10 +368,10 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Stats Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4 mb-6">
+      {/* Stats Cards Grid - 4 Cards Only */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {/* Total Coupons */}
-        <div onClick={()=>navigate('/coupons')} className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-5 text-white shadow-lg transform transition-transform hover:scale-[1.02]">
+        <div onClick={()=>navigate('/coupons')} className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-5 text-white shadow-lg transform transition-transform hover:scale-[1.02] cursor-pointer">
           <div className="flex items-center justify-between mb-3">
             <div className="p-2 bg-white/20 rounded-xl">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -289,7 +385,7 @@ const Dashboard = () => {
         </div>
 
         {/* Active Coupons */}
-        <div onClick={()=>navigate('/coupons')} className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-5 text-white shadow-lg transform transition-transform hover:scale-[1.02]">
+        <div onClick={()=>navigate('/coupons')} className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-5 text-white shadow-lg transform transition-transform hover:scale-[1.02] cursor-pointer">
           <div className="flex items-center justify-between mb-3">
             <div className="p-2 bg-white/20 rounded-xl">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -328,34 +424,6 @@ const Dashboard = () => {
           </div>
           <div className="text-2xl font-bold mb-1">{todayStats.redemptions}</div>
           <h4 className="text-xs font-medium text-orange-100">Redemptions Today</h4>
-        </div>
-
-        {/* Revenue Today */}
-        <div onClick={()=>navigate('/paymentlist')} className="bg-gradient-to-br from-pink-500 to-pink-600 rounded-2xl p-5 text-white shadow-lg transform transition-transform hover:scale-[1.02]">
-          <div className="flex items-center justify-between mb-3">
-            <div className="p-2 bg-white/20 rounded-xl">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <span className="text-xs font-medium bg-white/20 px-2 py-1 rounded-full">Today</span>
-          </div>
-          <div className="text-2xl font-bold mb-1">${todayStats.revenue.toFixed(2)}</div>
-          <h4 className="text-xs font-medium text-pink-100">Revenue Today</h4>
-        </div>
-
-        {/* Average Rating */}
-        <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-2xl p-5 text-white shadow-lg transform transition-transform hover:scale-[1.02]">
-          <div className="flex items-center justify-between mb-3">
-            <div className="p-2 bg-white/20 rounded-xl">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-              </svg>
-            </div>
-            <span className="text-xs font-medium bg-white/20 px-2 py-1 rounded-full">Rating</span>
-          </div>
-          <div className="text-2xl font-bold mb-1">{totals.rating.toFixed(1)}</div>
-          <h4 className="text-xs font-medium text-indigo-100">Avg. Rating</h4>
         </div>
       </div>
 
@@ -494,64 +562,8 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Monthly Revenue Chart */}
-      <div className="bg-white rounded-2xl p-6 shadow-lg mb-6">
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h3 className="text-lg font-bold text-gray-800">Monthly Revenue</h3>
-            <p className="text-sm text-gray-600">Revenue generated per week</p>
-          </div>
-        </div>
-
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={monthlyRevenue}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-            <XAxis
-              dataKey="name"
-              axisLine={false}
-              tickLine={false}
-              tick={{ fill: '#666' }}
-            />
-            <YAxis
-              axisLine={false}
-              tickLine={false}
-              tick={{ fill: '#666' }}
-              tickFormatter={(value) => `$${value}`}
-            />
-            <Tooltip
-              formatter={(value) => [`$${value}`, 'Revenue']}
-              contentStyle={{
-                backgroundColor: 'white',
-                border: '1px solid #e5e7eb',
-                borderRadius: '12px',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-              }}
-            />
-            <Bar
-              dataKey="revenue"
-              radius={[8, 8, 0, 0]}
-              fill="url(#colorRevenue)"
-            >
-              {monthlyRevenue.map((entry, index) => (
-                <Cell
-                  key={`cell-${index}`}
-                  fill={barColors[index % barColors.length]}
-                  opacity={0.8}
-                />
-              ))}
-            </Bar>
-            <defs>
-              <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#8884d8" stopOpacity={0.8} />
-                <stop offset="100%" stopColor="#8884d8" stopOpacity={0.2} />
-              </linearGradient>
-            </defs>
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-
-      {/* Bottom Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Bottom Section - Three Columns */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         {/* Top Coupons */}
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
           <div className="p-6 border-b">
@@ -565,25 +577,30 @@ const Dashboard = () => {
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Coupon Name</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Category</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Downloads</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Discount</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {dashboardData.topCoupons && dashboardData.topCoupons.length > 0 ? (
+                {dashboardData.topCoupons && Array.isArray(dashboardData.topCoupons) && dashboardData.topCoupons.length > 0 ? (
                   dashboardData.topCoupons.slice(0, 5).map((coupon, index) => (
                     <tr key={index} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4">
                         <div className="flex items-center">
-
                           <div className="ml-4">
                             <div className="font-medium text-gray-900">{coupon.name || "Unnamed Coupon"}</div>
                           </div>
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="text-lg font-bold text-gray-900">
+                        <div className="text-sm text-gray-900">
                           {coupon.category || "N/A"}
                         </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                          {coupon.downloaded || 0}
+                        </span>
                       </td>
                       <td className="px-6 py-4">
                         <div className="h-10 w-10 flex-shrink-0 bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg flex items-center justify-center">
@@ -594,7 +611,7 @@ const Dashboard = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="3" className="px-6 py-12 text-center">
+                    <td colSpan="4" className="px-6 py-12 text-center">
                       <div className="text-gray-400 text-4xl mb-3">🎫</div>
                       <h4 className="text-lg font-medium text-gray-700 mb-2">No Coupons Yet</h4>
                       <p className="text-gray-500">Create your first coupon to get started</p>
@@ -606,7 +623,83 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Recent Feedbacks - UPDATED SECTION */}
+        {/* Customer Insights */}
+        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+          <div className="p-6 border-b">
+            <h3 className="text-lg font-bold text-gray-800">Top Customers</h3>
+            <p className="text-gray-600 text-sm mt-1">Customers with most coupon usage</p>
+          </div>
+
+          <div className="overflow-y-auto max-h-[400px]">
+            {customerInsightsData.length > 0 ? (
+              <>
+                {currentCustomers.map((customer, index) => (
+                  <div key={index} className="p-4 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <div className="h-10 w-10 bg-gradient-to-br from-green-100 to-green-200 rounded-full flex items-center justify-center">
+                          {customer.profileImage ? (
+                            <img 
+                              src={customer.profileImage} 
+                              alt={customer.name}
+                              className="h-10 w-10 rounded-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-green-600 font-bold">
+                              {customer.name.charAt(0).toUpperCase()}
+                            </span>
+                          )}
+                        </div>
+                        <div className="ml-4">
+                          <h4 className="font-medium text-gray-900">{customer.name}</h4>
+                          <p className="text-xs text-gray-500 truncate max-w-[150px]">{customer.email}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-bold text-gray-800">{customer.couponsUsed}</div>
+                        <div className="text-xs text-gray-500">Coupons Used</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Pagination Controls */}
+                {totalCustomerPages > 1 && (
+                  <div className="p-4 border-t border-gray-100">
+                    <div className="flex justify-between items-center">
+                      <p className="text-sm text-gray-500">
+                        Showing {indexOfFirstCustomer + 1}-{Math.min(indexOfLastCustomer, customerInsightsData.length)} of {customerInsightsData.length} customers
+                      </p>
+                      <div className="flex space-x-1">
+                        {Array.from({ length: Math.min(totalCustomerPages, 5) }, (_, i) => (
+                          <button
+                            key={i}
+                            onClick={() => setCurrentCustomerPage(i + 1)}
+                            className={`px-3 py-1 text-sm rounded-lg transition-all ${
+                              currentCustomerPage === i + 1 
+                                ? "bg-gradient-to-r from-green-500 to-green-600 text-white" 
+                                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                            }`}
+                          >
+                            {i + 1}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="p-12 text-center">
+                <div className="text-gray-400 text-4xl mb-3">👥</div>
+                <h4 className="text-lg font-medium text-gray-700 mb-2">No Customer Data</h4>
+                <p className="text-gray-500">Customer insights will appear here</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Recent Feedbacks */}
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
           <div className="p-6 border-b">
             <h3 className="text-lg font-bold text-gray-800">Recent Feedbacks</h3>
@@ -614,68 +707,35 @@ const Dashboard = () => {
           </div>
 
           <div className="overflow-y-auto max-h-[400px]">
-            {dashboardData.recentFeedbacks && dashboardData.recentFeedbacks.length > 0 ? (
+            {dashboardData.recentFeedbacks && Array.isArray(dashboardData.recentFeedbacks) && dashboardData.recentFeedbacks.length > 0 ? (
               dashboardData.recentFeedbacks.slice(0, 5).map((feedback, index) => {
                 const userDetails = getUserDetails(feedback);
+                const userInitial = getUserInitial(feedback, userDetails);
                 
                 return (
-                  <div key={index} className="p-6 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
-                    <div className="flex items-start justify-between mb-3">
+                  <div key={index} className="p-4 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+                    <div className="flex items-start justify-between mb-2">
                       <div className="flex items-center">
-                        <div className="h-10 w-10 bg-gradient-to-br from-purple-100 to-purple-200 rounded-full flex items-center justify-center">
-                          <span className="text-purple-600 font-bold">
-                            {userDetails 
-                              ? userDetails.name?.charAt(0).toUpperCase() 
-                              : feedback.userId 
-                                ? feedback.userId.charAt(0).toUpperCase()
-                                : "A"}
+                        <div className="h-8 w-8 bg-gradient-to-br from-purple-100 to-purple-200 rounded-full flex items-center justify-center">
+                          <span className="text-purple-600 font-bold text-sm">
+                            {userInitial}
                           </span>
                         </div>
-                        <div className="ml-4">
-                          <h4 className="font-medium text-gray-900">
+                        <div className="ml-3">
+                          <h4 className="font-medium text-gray-900 text-sm">
                             {userDetails 
                               ? userDetails.name || "Anonymous User"
-                              : feedback.userId 
-                                ? `User ${feedback.userId.substring(0, 6)}...`
-                                : "Deleted User"}
+                              : feedback.userId?.name || getShortenedUserId(feedback)}
                           </h4>
-                          <div className="flex items-center mt-1">
-                            {userDetails && userDetails.email && (
-                              <span className="text-xs text-gray-500">{userDetails.email}</span>
-                            )}
-                            {userDetails && userDetails.city && (
-                              <span className="text-xs text-gray-500 ml-2">• {userDetails.city}</span>
-                            )}
-                          </div>
-                          {userDetails && userDetails.coins !== undefined && (
-                            <div className="flex items-center mt-1">
-                              <svg className="w-3 h-3 text-yellow-500 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                              </svg>
-                              <span className="text-xs font-medium text-gray-700">{userDetails.coins} coins</span>
-                            </div>
-                          )}
                         </div>
                       </div>
                       <span className="text-xs text-gray-500">
                         {formatDate(feedback.createdAt)}
                       </span>
                     </div>
-                    <p className="text-gray-700 text-sm mb-2">
+                    <p className="text-gray-700 text-sm">
                       {feedback.tellUsAboutExperience || feedback.comment || "No comment provided"}
                     </p>
-                    {userDetails && userDetails.couponCode && (
-                      <div className="mt-2 flex items-center">
-                        <span className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded mr-2">
-                          Code: {userDetails.couponCode}
-                        </span>
-                      </div>
-                    )}
-                    {feedback.userId && !userDetails && (
-                      <div className="mt-2">
-                        <span className="text-xs text-gray-400">User ID: {feedback.userId}</span>
-                      </div>
-                    )}
                   </div>
                 );
               })
@@ -696,13 +756,11 @@ const Dashboard = () => {
           <div>
             <h4 className="font-medium text-gray-800">Vendor Information</h4>
             <p className="text-sm text-gray-600">
-              {dashboardData.vendor?.name} • {dashboardData.vendor?.email} • {dashboardData.vendor?.phone}
+              {dashboardData.vendor?.name || "Unknown"} • {dashboardData.vendor?.email || "N/A"} • {dashboardData.vendor?.phone || "N/A"}
             </p>
           </div>
           <div className="mt-4 md:mt-0">
-            <p className="text-sm text-gray-500">
-              Dashboard updated: {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </p>
+            
           </div>
         </div>
       </div>

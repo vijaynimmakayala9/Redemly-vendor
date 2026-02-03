@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import { Edit2, Save, X, MapPin, Phone, Mail, User, Building, Map, FileText, Globe, CheckCircle, Clock } from "lucide-react";
+import { Edit2, Save, X, MapPin, Phone, Mail, User, Building, Map, FileText, Globe, CheckCircle, Clock, Plus, Trash2 } from "lucide-react";
 
 const MyProfile = () => {
   const vendorId = localStorage.getItem("vendorId");
@@ -48,13 +48,71 @@ const MyProfile = () => {
     });
   };
 
+  // Add new address
+  const handleAddAddress = () => {
+    const newAddress = {
+      street: "",
+      city: "",
+      zipcode: ""
+      // Don't add _id for new addresses - let backend handle it
+    };
+    
+    setUpdatedVendor({
+      ...updatedVendor,
+      addresses: [...updatedVendor.addresses, newAddress]
+    });
+  };
+
+  // Remove address
+  const handleRemoveAddress = (index) => {
+    if (updatedVendor.addresses.length <= 1) {
+      alert("At least one address is required");
+      return;
+    }
+    
+    const newAddresses = [...updatedVendor.addresses];
+    newAddresses.splice(index, 1);
+    setUpdatedVendor({
+      ...updatedVendor,
+      addresses: newAddresses
+    });
+  };
+
+  // Prepare addresses for API - ensure all have proper structure
+  const prepareAddressesForAPI = (addresses) => {
+    return addresses.map(addr => {
+      // Ensure each address has all required fields
+      const cleanAddress = {
+        street: addr.street || "",
+        city: addr.city || "",
+        zipcode: addr.zipcode || ""
+      };
+      
+      // Only include _id if it exists and is not a temporary one
+      if (addr._id && !addr._id.toString().startsWith('temp-')) {
+        cleanAddress._id = addr._id;
+      }
+      
+      return cleanAddress;
+    });
+  };
+
   // Update vendor API call
   const handleUpdate = async () => {
     try {
       setSaving(true);
+      
+      // Prepare the data for API
+      const dataToSend = {
+        ...updatedVendor,
+        addresses: prepareAddressesForAPI(updatedVendor.addresses)
+      };
+      
+      console.log("Sending data:", JSON.stringify(dataToSend, null, 2));
+      
       const res = await axios.put(
         `https://api.redemly.com/api/vendor/update/${vendorId}`,
-        updatedVendor,
+        dataToSend,
         {
           headers: {
             "Content-Type": "application/json"
@@ -63,14 +121,15 @@ const MyProfile = () => {
       );
 
       if (res.data.success) {
-        setVendor(updatedVendor);
+        // Refetch to get the updated data with proper _ids
+        await fetchProfile();
         setEditing(false);
         alert("Profile updated successfully!");
       } else {
         alert("Failed to update profile: " + res.data.message);
       }
     } catch (err) {
-      console.error("Update error:", err);
+      console.error("Update error:", err.response?.data || err);
       alert("Error updating profile: " + (err.response?.data?.message || err.message));
     } finally {
       setSaving(false);
@@ -337,19 +396,42 @@ const MyProfile = () => {
 
             {/* Addresses */}
             <div className="mb-10">
-              <h3 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
-                <MapPin className="w-6 h-6 mr-2 text-blue-600" />
-                Addresses
-              </h3>
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-2xl font-bold text-gray-800 flex items-center">
+                  <MapPin className="w-6 h-6 mr-2 text-blue-600" />
+                  Addresses
+                </h3>
+                
+                {editing && (
+                  <button
+                    onClick={handleAddAddress}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Address
+                  </button>
+                )}
+              </div>
               
               <div className="space-y-6">
-                {vendor.addresses.map((address, index) => (
-                  <div key={address._id} className="bg-gray-50 p-6 rounded-xl border border-gray-200">
+                {(editing ? updatedVendor.addresses : vendor.addresses).map((address, index) => (
+                  <div key={address._id || `address-${index}`} className="bg-gray-50 p-6 rounded-xl border border-gray-200">
                     <div className="flex justify-between items-center mb-4">
                       <span className="font-semibold text-blue-700 flex items-center">
                         <MapPin className="w-5 h-5 mr-2" />
                         Address {index + 1}
                       </span>
+                      
+                      {editing && (
+                        <button
+                          onClick={() => handleRemoveAddress(index)}
+                          className="flex items-center gap-1 px-3 py-1 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition"
+                          disabled={updatedVendor.addresses.length <= 1}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Remove
+                        </button>
+                      )}
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -362,6 +444,7 @@ const MyProfile = () => {
                             value={updatedVendor.addresses[index]?.street || ""}
                             onChange={(e) => handleAddressChange(index, 'street', e.target.value)}
                             className="w-full px-4 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none"
+                            placeholder="Enter street address"
                           />
                         ) : (
                           <div className="font-medium text-gray-800">{address.street}</div>
@@ -377,6 +460,7 @@ const MyProfile = () => {
                             value={updatedVendor.addresses[index]?.city || ""}
                             onChange={(e) => handleAddressChange(index, 'city', e.target.value)}
                             className="w-full px-4 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none"
+                            placeholder="Enter city"
                           />
                         ) : (
                           <div className="font-medium text-gray-800">{address.city}</div>
@@ -392,6 +476,7 @@ const MyProfile = () => {
                             value={updatedVendor.addresses[index]?.zipcode || ""}
                             onChange={(e) => handleAddressChange(index, 'zipcode', e.target.value)}
                             className="w-full px-4 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none"
+                            placeholder="Enter zip code"
                           />
                         ) : (
                           <div className="font-medium text-gray-800">{address.zipcode}</div>
@@ -419,7 +504,8 @@ const MyProfile = () => {
                   </label>
                   {editing ? (
                     <input
-                      type="text"
+                      type="number"
+                      step="any"
                       name="latitude"
                       value={updatedVendor.location?.coordinates[1] || ""}
                       onChange={(e) => {
@@ -434,6 +520,7 @@ const MyProfile = () => {
                         });
                       }}
                       className="w-full px-4 py-2 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-400 outline-none"
+                      placeholder="Enter latitude"
                     />
                   ) : (
                     <div className="text-lg font-semibold text-gray-800">
@@ -450,7 +537,8 @@ const MyProfile = () => {
                   </label>
                   {editing ? (
                     <input
-                      type="text"
+                      type="number"
+                      step="any"
                       name="longitude"
                       value={updatedVendor.location?.coordinates[0] || ""}
                       onChange={(e) => {
@@ -465,6 +553,7 @@ const MyProfile = () => {
                         });
                       }}
                       className="w-full px-4 py-2 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-400 outline-none"
+                      placeholder="Enter longitude"
                     />
                   ) : (
                     <div className="text-lg font-semibold text-gray-800">
