@@ -69,10 +69,11 @@ const Dashboard = () => {
       const data = await response.json();
       console.log("Dashboard Data:", data);
       setDashboardData(data.data);
-      
+
       // Fetch user details for each feedback
-      if (data.data && data.data.recentFeedbacks) {
-        await fetchFeedbackUserDetails(data.data.recentFeedbacks);
+      // API returns feedbacks under data.feedback.recent
+      if (data.data && data.data.feedback && data.data.feedback.recent) {
+        await fetchFeedbackUserDetails(data.data.feedback.recent);
       }
     } catch (err) {
       setError(err.message || "Failed to fetch dashboard data");
@@ -86,15 +87,15 @@ const Dashboard = () => {
     if (!feedbacks || !Array.isArray(feedbacks)) return;
 
     const usersMap = {};
-    
+
     for (const feedback of feedbacks) {
       if (feedback.userId) {
         try {
           // Handle userId whether it's string or object
-          const userId = typeof feedback.userId === 'string' 
-            ? feedback.userId 
+          const userId = typeof feedback.userId === 'string'
+            ? feedback.userId
             : feedback.userId._id || feedback.userId.id || String(feedback.userId);
-            
+
           const response = await fetch(`https://api.redemly.com/api/admin/getsingleuser/${userId}`);
           if (response.ok) {
             const userData = await response.json();
@@ -105,7 +106,7 @@ const Dashboard = () => {
         }
       }
     }
-    
+
     setFeedbackUsers(usersMap);
   };
 
@@ -149,15 +150,17 @@ const Dashboard = () => {
   };
 
   // Calculate today's stats
+  // API returns: data.timeStats.daily.downloads / data.timeStats.daily.redemptions
   const calculateTodayStats = () => {
     if (!dashboardData) return { downloads: 0, redemptions: 0 };
     return {
-      downloads: dashboardData.todayStats?.downloadsToday || 0,
-      redemptions: dashboardData.todayStats?.redemptionsToday || 0
+      downloads: dashboardData.timeStats?.daily?.downloads ?? dashboardData.downloadStats?.today ?? 0,
+      redemptions: dashboardData.timeStats?.daily?.redemptions ?? dashboardData.redemptionStats?.today ?? 0
     };
   };
 
   // Calculate totals
+  // API returns: data.quickStats (totalCoupons, activeCoupons, totalDownloads, totalRedemptions, averageRating, totalCustomers)
   const calculateTotals = () => {
     if (!dashboardData) return {
       coupons: 0,
@@ -167,19 +170,20 @@ const Dashboard = () => {
       rating: 0
     };
     return {
-      coupons: dashboardData.totals?.totalCoupons || 0,
-      downloads: dashboardData.totals?.totalDownloads || 0,
-      redemptions: dashboardData.totals?.totalRedemptions || 0,
-      feedbacks: dashboardData.totals?.totalFeedbacks || 0,
-      rating: dashboardData.totals?.averageRating || 0
+      coupons: dashboardData.quickStats?.totalCoupons ?? dashboardData.couponStats?.total ?? 0,
+      downloads: dashboardData.quickStats?.totalDownloads ?? dashboardData.downloadStats?.total ?? 0,
+      redemptions: dashboardData.quickStats?.totalRedemptions ?? dashboardData.redemptionStats?.total ?? 0,
+      feedbacks: dashboardData.feedback?.totalFeedbacks ?? 0,
+      rating: dashboardData.quickStats?.averageRating ?? dashboardData.feedback?.averageRating ?? 0
     };
   };
+  console.log("Calculated Totals:", calculateTotals());
 
   // Get user details for a feedback item - SAFE VERSION
   const getUserDetails = (feedback) => {
     try {
       if (!feedback || !feedback.userId) return null;
-      
+
       // Extract userId safely
       let userId;
       if (typeof feedback.userId === 'string') {
@@ -191,7 +195,7 @@ const Dashboard = () => {
       } else {
         userId = String(feedback.userId);
       }
-      
+
       return feedbackUsers[userId] || null;
     } catch (err) {
       console.warn('Error getting user details:', err);
@@ -205,15 +209,20 @@ const Dashboard = () => {
       if (userDetails?.name) {
         return userDetails.name.charAt(0).toUpperCase();
       }
-      
+
+      // API returns userId as object with name populated
+      if (feedback.userId?.name) {
+        return feedback.userId.name.charAt(0).toUpperCase();
+      }
+
       // Try to get initial from userId
       if (feedback.userId) {
-        const userIdStr = typeof feedback.userId === 'string' 
-          ? feedback.userId 
+        const userIdStr = typeof feedback.userId === 'string'
+          ? feedback.userId
           : feedback.userId._id || feedback.userId.id || String(feedback.userId);
         return userIdStr.charAt(0).toUpperCase();
       }
-      
+
       return "A";
     } catch (err) {
       console.warn('Error getting user initial:', err);
@@ -241,7 +250,10 @@ const Dashboard = () => {
   const getShortenedUserId = (feedback) => {
     try {
       if (!feedback.userId) return "Unknown User";
-      
+
+      // If userId is a populated object with a name, prefer that
+      if (feedback.userId?.name) return feedback.userId.name;
+
       let userIdStr;
       if (typeof feedback.userId === 'string') {
         userIdStr = feedback.userId;
@@ -252,7 +264,7 @@ const Dashboard = () => {
       } else {
         userIdStr = String(feedback.userId);
       }
-      
+
       return `User ${userIdStr.substring(0, 6)}...`;
     } catch (err) {
       return "Unknown User";
@@ -262,7 +274,7 @@ const Dashboard = () => {
   // Get customer insights data from backend
   const getCustomerInsightsData = () => {
     if (!dashboardData?.customerInsights || !Array.isArray(dashboardData.customerInsights)) return [];
-    
+
     return dashboardData.customerInsights.map((customer, index) => ({
       id: customer._id || index,
       name: customer.name || "Unknown Customer",
@@ -320,7 +332,10 @@ const Dashboard = () => {
   const couponStatusData = calculateCouponStatus();
   const weeklyDownloads = formatWeeklyData(dashboardData.charts?.weeklyDownloads || []);
   const weeklyRedemptions = formatWeeklyData(dashboardData.charts?.weeklyRedemptions || []);
-  
+
+  // API returns feedbacks under data.feedback.recent (not data.recentFeedbacks)
+  const recentFeedbacks = dashboardData.feedback?.recent || [];
+
   // Get customer insights data
   const customerInsightsData = getCustomerInsightsData();
   const indexOfLastCustomer = currentCustomerPage * customersPerPage;
@@ -371,7 +386,7 @@ const Dashboard = () => {
       {/* Stats Cards Grid - 4 Cards Only */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {/* Total Coupons */}
-        <div onClick={()=>navigate('/coupons')} className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-5 text-white shadow-lg transform transition-transform hover:scale-[1.02] cursor-pointer">
+        <div onClick={() => navigate('/coupons')} className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-5 text-white shadow-lg transform transition-transform hover:scale-[1.02] cursor-pointer">
           <div className="flex items-center justify-between mb-3">
             <div className="p-2 bg-white/20 rounded-xl">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -385,7 +400,7 @@ const Dashboard = () => {
         </div>
 
         {/* Active Coupons */}
-        <div onClick={()=>navigate('/coupons')} className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-5 text-white shadow-lg transform transition-transform hover:scale-[1.02] cursor-pointer">
+        <div onClick={() => navigate('/coupons')} className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-5 text-white shadow-lg transform transition-transform hover:scale-[1.02] cursor-pointer">
           <div className="flex items-center justify-between mb-3">
             <div className="p-2 bg-white/20 rounded-xl">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -394,7 +409,8 @@ const Dashboard = () => {
             </div>
             <span className="text-xs font-medium bg-white/20 px-2 py-1 rounded-full">Active</span>
           </div>
-          <div className="text-2xl font-bold mb-1">{dashboardData.totals?.activeCoupons || 0}</div>
+          {/* API: data.quickStats.activeCoupons */}
+          <div className="text-2xl font-bold mb-1">{dashboardData.quickStats?.activeCoupons ?? dashboardData.couponStats?.active ?? 0}</div>
           <h4 className="text-xs font-medium text-green-100">Active Coupons</h4>
         </div>
 
@@ -599,12 +615,16 @@ const Dashboard = () => {
                       </td>
                       <td className="px-6 py-4">
                         <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-                          {coupon.downloaded || 0}
+                          {/* API returns "downloads" not "downloaded" */}
+                          {coupon.downloads ?? coupon.downloaded ?? 0}
                         </span>
                       </td>
                       <td className="px-6 py-4">
                         <div className="h-10 w-10 flex-shrink-0 bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg flex items-center justify-center">
-                          <span className="text-blue-600 font-bold">{coupon.discountPercentage || 0}%</span>
+                          {/* API returns "discount" as string e.g. "50%" not "discountPercentage" as number */}
+                          <span className="text-blue-600 font-bold text-xs">
+                            {coupon.discount ?? (coupon.discountPercentage != null ? `${coupon.discountPercentage}%` : "N/A")}
+                          </span>
                         </div>
                       </td>
                     </tr>
@@ -639,8 +659,8 @@ const Dashboard = () => {
                       <div className="flex items-center">
                         <div className="h-10 w-10 bg-gradient-to-br from-green-100 to-green-200 rounded-full flex items-center justify-center">
                           {customer.profileImage ? (
-                            <img 
-                              src={customer.profileImage} 
+                            <img
+                              src={customer.profileImage}
                               alt={customer.name}
                               className="h-10 w-10 rounded-full object-cover"
                             />
@@ -676,8 +696,8 @@ const Dashboard = () => {
                             key={i}
                             onClick={() => setCurrentCustomerPage(i + 1)}
                             className={`px-3 py-1 text-sm rounded-lg transition-all ${
-                              currentCustomerPage === i + 1 
-                                ? "bg-gradient-to-r from-green-500 to-green-600 text-white" 
+                              currentCustomerPage === i + 1
+                                ? "bg-gradient-to-r from-green-500 to-green-600 text-white"
                                 : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                             }`}
                           >
@@ -707,11 +727,12 @@ const Dashboard = () => {
           </div>
 
           <div className="overflow-y-auto max-h-[400px]">
-            {dashboardData.recentFeedbacks && Array.isArray(dashboardData.recentFeedbacks) && dashboardData.recentFeedbacks.length > 0 ? (
-              dashboardData.recentFeedbacks.slice(0, 5).map((feedback, index) => {
+            {/* API returns feedbacks at data.feedback.recent (not data.recentFeedbacks) */}
+            {recentFeedbacks.length > 0 ? (
+              recentFeedbacks.slice(0, 5).map((feedback, index) => {
                 const userDetails = getUserDetails(feedback);
                 const userInitial = getUserInitial(feedback, userDetails);
-                
+
                 return (
                   <div key={index} className="p-4 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
                     <div className="flex items-start justify-between mb-2">
@@ -723,7 +744,7 @@ const Dashboard = () => {
                         </div>
                         <div className="ml-3">
                           <h4 className="font-medium text-gray-900 text-sm">
-                            {userDetails 
+                            {userDetails
                               ? userDetails.name || "Anonymous User"
                               : feedback.userId?.name || getShortenedUserId(feedback)}
                           </h4>
@@ -760,7 +781,6 @@ const Dashboard = () => {
             </p>
           </div>
           <div className="mt-4 md:mt-0">
-            
           </div>
         </div>
       </div>
