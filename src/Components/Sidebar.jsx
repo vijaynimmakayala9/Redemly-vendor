@@ -89,11 +89,11 @@ const Sidebar = ({ isCollapsed, isMobile, setIsCollapsed }) => {
     {
       icon: <i className="ri-money-dollar-circle-fill"></i>,
       name: "Payments",
-      path: "/paymentlist",
+      path: "/paymentsummary",
       dropdown: [
-        { name: "Payment Due", path: "/paymentlist" },
+        // { name: "Payment Due", path: "/paymentlist" },
         { name: "Payment Summary", path: "/paymentsummary" },
-        { name: "Payment History", path: "/payment-history" }
+        // { name: "Payment History", path: "/payment-history" }
       ],
     },
     {
