@@ -20,7 +20,6 @@ import {
 } from "react-icons/fa";
 
 const API_BASE = "https://api.redemly.com/api";
-const LOCAL_API_BASE = "https://api.redemly.com/api";
 const PAGE_SIZE = 5;
 
 // Razorpay initialization
@@ -186,7 +185,7 @@ function PaymentModal({ isOpen, onClose, periodData, vendorId, onPaymentComplete
 
     try {
       const response = await axios.post(
-        `${LOCAL_API_BASE}/vendor/${vendorId}/payments/request-offline`,
+        `${API_BASE}/vendor/${vendorId}/payments/request-offline`,
         formData,
         {
           headers: {
@@ -217,39 +216,60 @@ function PaymentModal({ isOpen, onClose, periodData, vendorId, onPaymentComplete
     setError("");
 
     try {
+      // Prepare request body based on period type
+      const requestBody = {
+        periodType: periodData.periodType,
+        month: periodData.month,
+      };
+
+      if (periodData.periodType === "weekly") {
+        requestBody.startDate = periodData.startDate;
+        requestBody.endDate = periodData.endDate;
+      }
+
+      console.log("Initiating online payment with:", requestBody);
+
       // Step 1: Initiate online payment
       const initiateResponse = await axios.post(
-        `${LOCAL_API_BASE}/vendor/${vendorId}/payments/initiate-online`,
-        {
-          periodType: periodData.periodType,
-          month: periodData.month,
-        }
+        `${API_BASE}/vendor/${vendorId}/payments/initiate-online`,
+        requestBody
       );
 
-      const { orderId, amountINR, currency, keyId, amountUSD, periodLabel } = initiateResponse.data;
+      console.log("Initiate response:", initiateResponse.data);
 
+      const { order, periodSummary, razorpayKey } = initiateResponse.data;
+      
       // Step 2: Configure Razorpay options
       const options = {
-        key: "rzp_test_BxtRNvflG06PTV", // Fallback to your key
-        amount: amountINR * 100, // Amount in paise
-        currency: currency || "INR",
+        key: razorpayKey,
+        amount: order.amount,
+        currency: order.currency,
         name: "Redemly",
-        description: `Payment for ${periodLabel || periodData.periodLabel}`,
-        order_id: orderId,
+        description: `Payment for ${periodSummary.periodLabel}`,
+        order_id: order.id,
         handler: async (paymentResponse) => {
           try {
-
-            console.log("razorpay response:", paymentResponse);
-            console.log("ordereId:", orderId)
+            console.log("Razorpay payment response:", paymentResponse);
+            
             // Step 3: Verify payment
+            const verifyBody = {
+              razorpay_order_id: paymentResponse.razorpay_order_id,
+              razorpay_payment_id: paymentResponse.razorpay_payment_id,
+              periodType: periodData.periodType,
+              month: periodData.month,
+            };
+
+            if (periodData.periodType === "weekly") {
+              verifyBody.startDate = periodData.startDate;
+              verifyBody.endDate = periodData.endDate;
+            }
+
             const verifyResponse = await axios.post(
-              `${LOCAL_API_BASE}/vendor/${vendorId}/payments/verify`,
-              {
-                razorpay_order_id: initiateResponse.data.order.id,
-                razorpay_payment_id: paymentResponse.razorpay_payment_id,
-                // razorpay_signature: paymentResponse.razorpay_signature,
-              }
+              `${API_BASE}/vendor/${vendorId}/payments/verify-online`,
+              verifyBody
             );
+            
+            console.log("Verify response:", verifyResponse.data);
             
             setSuccess({
               message: "Payment verified successfully!",
@@ -261,11 +281,13 @@ function PaymentModal({ isOpen, onClose, periodData, vendorId, onPaymentComplete
               onClose();
             }, 2000);
           } catch (verifyErr) {
+            console.error("Verification error:", verifyErr);
             setError(verifyErr.response?.data?.message || "Payment verification failed");
+            setLoading(false);
           }
         },
         prefill: {
-          name: "Vendor Name",
+          name: "Vendor",
           email: "vendor@example.com",
           contact: "9999999999",
         },
@@ -273,6 +295,10 @@ function PaymentModal({ isOpen, onClose, periodData, vendorId, onPaymentComplete
           vendorId: vendorId,
           periodType: periodData.periodType,
           month: periodData.month,
+          ...(periodData.periodType === "weekly" && {
+            startDate: periodData.startDate,
+            endDate: periodData.endDate,
+          }),
         },
         theme: {
           color: "#2563eb",
@@ -288,6 +314,7 @@ function PaymentModal({ isOpen, onClose, periodData, vendorId, onPaymentComplete
       const razorpay = new window.Razorpay(options);
       
       razorpay.on('payment.failed', (response) => {
+        console.error("Payment failed:", response);
         setError(response.error.description || "Payment failed");
         setLoading(false);
       });
@@ -295,6 +322,7 @@ function PaymentModal({ isOpen, onClose, periodData, vendorId, onPaymentComplete
       razorpay.open();
       
     } catch (err) {
+      console.error("Online payment error:", err);
       setError(err.response?.data?.message || "Failed to initiate online payment");
       setLoading(false);
     }
@@ -484,7 +512,6 @@ function PaymentModal({ isOpen, onClose, periodData, vendorId, onPaymentComplete
   );
 }
 
-
 export default function VendorPaymentSummary() {
   const vendorId = localStorage.getItem("vendorId") || "6973f68d839888dd480ce933";
 
@@ -512,9 +539,6 @@ export default function VendorPaymentSummary() {
     isOpen: false,
     periodData: null,
   });
-
-  /* Payment History Modal state */
-  const [historyModal, setHistoryModal] = useState(false);
 
   /* ── Fetch Dashboard ── */
   const fetchDashboard = async () => {
@@ -682,6 +706,24 @@ export default function VendorPaymentSummary() {
   return (
     <div className="p-6 space-y-6">
 
+      {/* ── Header with gradient ── */}
+      <div className="relative mb-6">
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 rounded-2xl blur-xl opacity-30"></div>
+        <div className="relative bg-white/80 backdrop-blur-xl rounded-2xl p-6 border border-white/50 shadow-2xl">
+          <div className="flex items-center gap-4">
+            <div className="p-4 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl shadow-lg">
+              <FaStore className="text-3xl text-white" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+                Vendor Payment Dashboard
+              </h1>
+              <p className="text-gray-600 mt-1">Manage your payments and claims</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* ── Vendor Info and Actions ── */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         {vendor && (
@@ -702,7 +744,7 @@ export default function VendorPaymentSummary() {
       {summaryCards.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {summaryCards.map((card, i) => (
-            <div key={i} className={`${card.bg} rounded-2xl shadow-sm border p-5 flex flex-col gap-2`}>
+            <div key={i} className={`${card.bg} rounded-2xl shadow-sm border p-5 flex flex-col gap-2 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1`}>
               <div className="text-2xl">{card.icon}</div>
               <p className="text-2xl font-bold text-gray-800">{card.value}</p>
               <p className="text-xs text-gray-500">{card.label}</p>
@@ -757,7 +799,7 @@ export default function VendorPaymentSummary() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full border rounded-lg overflow-hidden text-sm">
-                <thead className="bg-blue-600 text-white">
+                <thead className="bg-gradient-to-r from-blue-600 to-blue-700 text-white">
                   <tr>
                     <th className="p-3 text-center">S No</th>
                     <th className="p-3 text-left">Month</th>
@@ -775,13 +817,13 @@ export default function VendorPaymentSummary() {
                     const isPending = row.paymentStatus === "pending" || row.paymentStatus === "partially_paid";
                     
                     return (
-                      <tr key={idx} className="border-t hover:bg-gray-50">
+                      <tr key={idx} className="border-t hover:bg-blue-50 transition-colors">
                         <td className="p-3 text-center">{(mbPage - 1) * PAGE_SIZE + idx + 1}</td>
-                        <td className="p-3">{formattedMonth}</td>
+                        <td className="p-3 font-medium">{formattedMonth}</td>
                         <td className="p-3 text-center">{row.totalCoupons}</td>
-                        <td className="p-3 text-center">${row.totalAmount}</td>
-                        <td className="p-3 text-center">${row.amountPaid}</td>
-                        <td className="p-3 text-center">${row.amountPending}</td>
+                        <td className="p-3 text-center font-semibold">${row.totalAmount}</td>
+                        <td className="p-3 text-center text-green-600">${row.amountPaid}</td>
+                        <td className="p-3 text-center text-yellow-600">${row.amountPending}</td>
                         <td className="p-3 text-center"><StatusBadge status={row.paymentStatus} /></td>
                         <td className="p-3 text-center">
                           {isPending && (
@@ -792,16 +834,16 @@ export default function VendorPaymentSummary() {
                                 periodLabel: formattedMonth,
                                 amount: row.amountPending,
                               })}
-                              className="px-3 py-1 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 transition"
+                              className="px-3 py-1 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 transition transform hover:scale-105"
                             >
                               Pay Now
                             </button>
                           )}
                           {row.paymentStatus === "paid" && (
-                            <span className="text-green-600 text-xs font-medium">✓ Paid</span>
+                            <span className="text-green-600 text-xs font-medium bg-green-100 px-2 py-1 rounded-full">✓ Paid</span>
                           )}
                           {row.paymentStatus === "approval_pending" && (
-                            <span className="text-purple-600 text-xs font-medium">⏳ Pending</span>
+                            <span className="text-purple-600 text-xs font-medium bg-purple-100 px-2 py-1 rounded-full">⏳ Pending</span>
                           )}
                         </td>
                       </tr>
@@ -862,7 +904,7 @@ export default function VendorPaymentSummary() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full border rounded-lg overflow-hidden text-sm">
-                <thead className="bg-blue-600 text-white">
+                <thead className="bg-gradient-to-r from-blue-600 to-blue-700 text-white">
                   <tr>
                     <th className="p-3 text-center">S No</th>
                     <th className="p-3 text-left">Week</th>
@@ -882,14 +924,14 @@ export default function VendorPaymentSummary() {
                     const month = row.month || startDate?.substring(0, 7);
                     
                     return (
-                      <tr key={idx} className="border-t hover:bg-gray-50">
+                      <tr key={idx} className="border-t hover:bg-blue-50 transition-colors">
                         <td className="p-3 text-center">{(wbPage - 1) * PAGE_SIZE + idx + 1}</td>
-                        <td className="p-3">Week {row.weekNumber}</td>
+                        <td className="p-3 font-medium">Week {row.weekNumber}</td>
                         <td className="p-3 text-center text-xs">{row.period}</td>
                         <td className="p-3 text-center">{row.totalCoupons}</td>
-                        <td className="p-3 text-center">${row.totalAmount}</td>
-                        <td className="p-3 text-center">${row.amountPaid}</td>
-                        <td className="p-3 text-center">${row.amountPending}</td>
+                        <td className="p-3 text-center font-semibold">${row.totalAmount}</td>
+                        <td className="p-3 text-center text-green-600">${row.amountPaid}</td>
+                        <td className="p-3 text-center text-yellow-600">${row.amountPending}</td>
                         <td className="p-3 text-center"><StatusBadge status={row.paymentStatus} /></td>
                         <td className="p-3 text-center">
                           {isPending && (
@@ -899,19 +941,19 @@ export default function VendorPaymentSummary() {
                                 month: month,
                                 startDate,
                                 endDate,
-                                periodLabel: `Week ${row.weekNumber}, ${row.period}`,
+                                periodLabel: `Week ${row.weekNumber} (${row.period})`,
                                 amount: row.amountPending,
                               })}
-                              className="px-3 py-1 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 transition"
+                              className="px-3 py-1 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 transition transform hover:scale-105"
                             >
                               Pay Now
                             </button>
                           )}
                           {row.paymentStatus === "paid" && (
-                            <span className="text-green-600 text-xs font-medium">✓ Paid</span>
+                            <span className="text-green-600 text-xs font-medium bg-green-100 px-2 py-1 rounded-full">✓ Paid</span>
                           )}
                           {row.paymentStatus === "approval_pending" && (
-                            <span className="text-purple-600 text-xs font-medium">⏳ Pending</span>
+                            <span className="text-purple-600 text-xs font-medium bg-purple-100 px-2 py-1 rounded-full">⏳ Pending</span>
                           )}
                         </td>
                       </tr>
@@ -970,7 +1012,7 @@ export default function VendorPaymentSummary() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full border rounded-lg overflow-hidden text-sm">
-                <thead className="bg-blue-600 text-white">
+                <thead className="bg-gradient-to-r from-blue-600 to-blue-700 text-white">
                   <tr>
                     <th className="p-3 text-center">S No</th>
                     <th className="p-3 text-left">Coupon</th>
@@ -985,7 +1027,7 @@ export default function VendorPaymentSummary() {
                   {paginatedRC.map((claim, idx) => {
                     const formattedMonth = new Date(claim.month + '-01').toLocaleString('default', { month: 'long', year: 'numeric' });
                     return (
-                      <tr key={idx} className="border-t hover:bg-gray-50">
+                      <tr key={idx} className="border-t hover:bg-blue-50 transition-colors">
                         <td className="p-3 text-center">{(rcPage - 1) * PAGE_SIZE + idx + 1}</td>
                         <td className="p-3">
                           <div className="font-medium">{claim.couponName}</div>
@@ -996,7 +1038,7 @@ export default function VendorPaymentSummary() {
                           <div className="text-xs text-gray-400">{claim.user?.email}</div>
                           <div className="text-xs text-gray-400">{claim.user?.phone}</div>
                         </td>
-                        <td className="p-3 text-center">${claim.amount}</td>
+                        <td className="p-3 text-center font-semibold">${claim.amount}</td>
                         <td className="p-3 text-center">{formattedMonth}</td>
                         <td className="p-3 text-center text-xs text-gray-500">
                           {new Date(claim.claimedAt).toLocaleString()}
