@@ -109,8 +109,10 @@
 
 // export default CouponHistoryTable;
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import axios from "axios";
+
+const PAGE_SIZE = 10;
 
 const CouponHistoryTable = () => {
   const vendorId = localStorage.getItem("vendorId");
@@ -119,15 +121,15 @@ const CouponHistoryTable = () => {
   const [history, setHistory] = useState([]);
   const [filteredHistory, setFilteredHistory] = useState([]);
 
+  const [currentPage, setCurrentPage] = useState(1);
+
   // Filters
   const [customerId, setCustomerId] = useState("");
   const [couponId, setCouponId] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
 
-  // ============================
-  // FETCH API
-  // ============================
+  // ================= FETCH API =================
   const fetchHistory = async () => {
     try {
       setLoading(true);
@@ -147,42 +149,43 @@ const CouponHistoryTable = () => {
     if (vendorId) fetchHistory();
   }, [vendorId]);
 
-  // ============================
-  // FILTER LOGIC
-  // ============================
+  // ================= FILTER =================
   useEffect(() => {
     let data = [...history];
 
-    if (customerId) {
+    if (customerId)
       data = data.filter((d) =>
         d.Customer_ID?.toLowerCase().includes(customerId.toLowerCase())
       );
-    }
 
-    if (couponId) {
+    if (couponId)
       data = data.filter((d) =>
         d.Coupon_ID?.toLowerCase().includes(couponId.toLowerCase())
       );
-    }
 
-    if (fromDate) {
+    if (fromDate)
       data = data.filter(
         (d) => new Date(d.Coupon_Download_Date) >= new Date(fromDate)
       );
-    }
 
-    if (toDate) {
+    if (toDate)
       data = data.filter(
         (d) => new Date(d.Coupon_Download_Date) <= new Date(toDate)
       );
-    }
 
     setFilteredHistory(data);
+    setCurrentPage(1); // reset page on filter change
   }, [customerId, couponId, fromDate, toDate, history]);
 
-  // ============================
-  // EXPORT CSV
-  // ============================
+  // ================= PAGINATION =================
+  const totalPages = Math.ceil(filteredHistory.length / PAGE_SIZE);
+
+  const paginatedData = filteredHistory.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
+
+  // ================= EXPORT CSV =================
   const exportCSV = () => {
     if (!filteredHistory.length) return;
 
@@ -203,9 +206,7 @@ const CouponHistoryTable = () => {
     a.click();
   };
 
-  // ============================
-  // UI
-  // ============================
+  // ================= UI =================
   return (
     <div className="p-6 min-h-screen bg-gradient-to-br from-blue-50 to-white">
       <div className="max-w-7xl mx-auto bg-white rounded-2xl shadow-xl p-6">
@@ -218,8 +219,7 @@ const CouponHistoryTable = () => {
 
           <button
             onClick={exportCSV}
-            className="mt-3 md:mt-0 px-5 py-2 rounded-lg text-white font-medium
-                       bg-gradient-to-r from-blue-600 to-blue-500 hover:opacity-90"
+            className="mt-3 md:mt-0 px-5 py-2 rounded-lg text-white font-medium bg-blue-600"
           >
             Export CSV
           </button>
@@ -227,99 +227,85 @@ const CouponHistoryTable = () => {
 
         {/* FILTERS */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <input
-            type="text"
-            placeholder="Customer ID"
-            value={customerId}
-            onChange={(e) => setCustomerId(e.target.value)}
-            className="border border-blue-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-400"
-          />
+          <input placeholder="Customer ID" value={customerId}
+            onChange={(e)=>setCustomerId(e.target.value)}
+            className="border p-2 rounded-lg"/>
 
-          <input
-            type="text"
-            placeholder="Coupon ID"
-            value={couponId}
-            onChange={(e) => setCouponId(e.target.value)}
-            className="border border-blue-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-400"
-          />
+          <input placeholder="Coupon ID" value={couponId}
+            onChange={(e)=>setCouponId(e.target.value)}
+            className="border p-2 rounded-lg"/>
 
-          <input
-            type="date"
-            value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
-            className="border border-blue-300 rounded-lg p-2"
-          />
+          <input type="date" value={fromDate}
+            onChange={(e)=>setFromDate(e.target.value)}
+            className="border p-2 rounded-lg"/>
 
-          <input
-            type="date"
-            value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
-            className="border border-blue-300 rounded-lg p-2"
-          />
+          <input type="date" value={toDate}
+            onChange={(e)=>setToDate(e.target.value)}
+            className="border p-2 rounded-lg"/>
         </div>
 
         {/* TABLE */}
         <div className="overflow-x-auto">
-          <table className="min-w-full border border-blue-200 text-sm">
-            <thead className="bg-blue-100 text-blue-700">
+          <table className="min-w-full border text-sm">
+            <thead className="bg-blue-100">
               <tr>
-                {[
-                  "SI No",
-                  "Customer ID",
-                  "Coupon ID",
-                  "Discount",
-                  "Downloaded",
-                  "Redeemed Date",
-                  "Redeemed Time",
-                  "Order Details",
-                  "Order Value",
-                  "Feedback",
-                ].map((h) => (
-                  <th key={h} className="px-4 py-2 border">
-                    {h}
-                  </th>
-                ))}
+                {["SI No","Customer ID","Coupon ID","Discount","Downloaded","Redeemed Date","Redeemed Time","Order Details","Order Value","Feedback"]
+                  .map(h=>(<th key={h} className="px-4 py-2 border">{h}</th>))}
               </tr>
             </thead>
 
             <tbody>
               {loading ? (
-                <tr>
-                  <td colSpan="10" className="text-center py-6 text-gray-500">
-                    Loading...
-                  </td>
-                </tr>
-              ) : filteredHistory.length === 0 ? (
-                <tr>
-                  <td colSpan="10" className="text-center py-6 text-gray-500">
-                    No coupon usage history found.
-                  </td>
-                </tr>
+                <tr><td colSpan="10" className="text-center py-6">Loading...</td></tr>
+              ) : paginatedData.length === 0 ? (
+                <tr><td colSpan="10" className="text-center py-6">No data found</td></tr>
               ) : (
-                filteredHistory.map((row, idx) => (
+                paginatedData.map((row, idx) => (
                   <tr key={idx} className="text-center hover:bg-blue-50">
                     <td className="border px-3 py-2">{row.SI_No}</td>
                     <td className="border px-3 py-2">{row.Customer_ID}</td>
-                    <td className="border px-3 py-2 font-medium text-blue-600">
-                      {row.Coupon_ID}
-                    </td>
+                    <td className="border px-3 py-2 text-blue-600">{row.Coupon_ID}</td>
                     <td className="border px-3 py-2">{row.Discount}</td>
                     <td className="border px-3 py-2">{row.Coupon_Download_Date}</td>
                     <td className="border px-3 py-2">{row.Coupon_Redeemed_Date}</td>
                     <td className="border px-3 py-2">{row.Coupon_Redeemed_Time}</td>
-                    <td className="border px-3 py-2">
-                      {row.Coupon_Order_Details || "-"}
-                    </td>
+                    <td className="border px-3 py-2">{row.Coupon_Order_Details || "-"}</td>
                     <td className="border px-3 py-2">{row.Order_Value}</td>
-                    <td className="border px-3 py-2">
-                      {row.Feedback || "-"}
-                    </td>
+                    <td className="border px-3 py-2">{row.Feedback || "-"}</td>
                   </tr>
                 ))
               )}
             </tbody>
           </table>
         </div>
+
+        {/* PAGINATION */}
+        {totalPages > 1 && (
+          <div className="flex justify-between items-center mt-6">
+            <p className="text-sm text-gray-600">
+              Page {currentPage} of {totalPages}
+            </p>
+
+            <div className="flex gap-2">
+              <button
+                disabled={currentPage === 1}
+                onClick={()=>setCurrentPage(p=>p-1)}
+                className="px-4 py-2 border rounded disabled:opacity-40"
+              >
+                Prev
+              </button>
+
+              <button
+                disabled={currentPage === totalPages}
+                onClick={()=>setCurrentPage(p=>p+1)}
+                className="px-4 py-2 border rounded disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );

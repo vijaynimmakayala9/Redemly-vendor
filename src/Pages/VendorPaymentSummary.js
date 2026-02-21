@@ -89,7 +89,7 @@ function Pagination({ page, totalPages, onChange }) {
 /* ── Status badge ── */
 function StatusBadge({ status }) {
   const isPaid = status === "paid" || status === "fully_paid" || status === "completed";
-  const isPending = status === "pending" || status === "payment_pending";
+  const isPending = status === "pending" || status === "partially_paid";
   const isApprovalPending = status === "approval_pending";
   const isFailed = status === "failed" || status === "rejected";
   
@@ -238,15 +238,16 @@ function PaymentModal({ isOpen, onClose, periodData, vendorId, onPaymentComplete
         order_id: orderId,
         handler: async (paymentResponse) => {
           try {
+
+            console.log("razorpay response:", paymentResponse);
+            console.log("ordereId:", orderId)
             // Step 3: Verify payment
             const verifyResponse = await axios.post(
               `${LOCAL_API_BASE}/vendor/${vendorId}/payments/verify`,
               {
-                razorpay_order_id: paymentResponse.razorpay_order_id,
+                razorpay_order_id: initiateResponse.data.order.id,
                 razorpay_payment_id: paymentResponse.razorpay_payment_id,
-                razorpay_signature: paymentResponse.razorpay_signature,
-                month: periodData.month,
-                periodType: periodData.periodType,
+                // razorpay_signature: paymentResponse.razorpay_signature,
               }
             );
             
@@ -771,7 +772,7 @@ export default function VendorPaymentSummary() {
                 <tbody>
                   {paginatedMB.map((row, idx) => {
                     const formattedMonth = new Date(row.month + '-01').toLocaleString('default', { month: 'long', year: 'numeric' });
-                    const isPending = row.paymentStatus === "pending" || row.paymentStatus === "payment_pending";
+                    const isPending = row.paymentStatus === "pending" || row.paymentStatus === "partially_paid";
                     
                     return (
                       <tr key={idx} className="border-t hover:bg-gray-50">
@@ -876,7 +877,7 @@ export default function VendorPaymentSummary() {
                 </thead>
                 <tbody>
                   {paginatedWB.map((row, idx) => {
-                    const isPending = row.paymentStatus === "pending" || row.paymentStatus === "payment_pending";
+                    const isPending = row.paymentStatus === "pending" || row.paymentStatus === "partially_paid";
                     const [startDate, endDate] = row.period.split(' - ');
                     const month = row.month || startDate?.substring(0, 7);
                     
@@ -958,7 +959,6 @@ export default function VendorPaymentSummary() {
               <option value="all">All Status</option>
               <option value="paid">Paid</option>
               <option value="pending">Pending</option>
-              <option value="fully_paid">Fully Paid</option>
             </select>
             <span className="text-xs text-gray-400 self-center">
               {filteredRC.length} result{filteredRC.length !== 1 ? "s" : ""}

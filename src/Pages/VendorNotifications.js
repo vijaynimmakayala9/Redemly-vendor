@@ -207,7 +207,9 @@ const VendorNotifications = () => {
 
       {/* Pagination */}
       {pagination.totalPages > 1 && (
-        <div className="flex justify-center mt-8 gap-2 flex-wrap">
+        <div className="flex justify-center mt-8 gap-2 flex-wrap items-center">
+
+          {/* Prev */}
           <button
             onClick={() => changePage(pagination.page - 1)}
             disabled={pagination.page === 1}
@@ -216,22 +218,48 @@ const VendorNotifications = () => {
             Prev
           </button>
 
-          {[...Array(pagination.totalPages)].map((_, i) => {
-            const page = i + 1;
-            return (
-              <button
-                key={page}
-                onClick={() => changePage(page)}
-                className={`px-3 py-1 border rounded ${pagination.page === page
+          {/* Page Numbers */}
+          {(() => {
+            const pages = [];
+            const current = pagination.page;
+            const total = pagination.totalPages;
+
+            // Always show first page
+            pages.push(1);
+
+            // Show dots before middle pages
+            if (current > 3) pages.push("start-ellipsis");
+
+            // Middle pages (c-1, c, c+1)
+            for (let i = current - 1; i <= current + 1; i++) {
+              if (i > 1 && i < total) pages.push(i);
+            }
+
+            // Show dots after middle pages
+            if (current < total - 2) pages.push("end-ellipsis");
+
+            // Always show last page
+            if (total > 1) pages.push(total);
+
+            return pages.map((p, i) =>
+              p === "start-ellipsis" || p === "end-ellipsis" ? (
+                <span key={i} className="px-2">...</span>
+              ) : (
+                <button
+                  key={i}
+                  onClick={() => changePage(p)}
+                  className={`px-3 py-1 border rounded ${pagination.page === p
                     ? "bg-blue-600 text-white"
                     : "hover:bg-gray-100"
-                  }`}
-              >
-                {page}
-              </button>
+                    }`}
+                >
+                  {p}
+                </button>
+              )
             );
-          })}
+          })()}
 
+          {/* Next */}
           <button
             onClick={() => changePage(pagination.page + 1)}
             disabled={pagination.page === pagination.totalPages}
@@ -239,6 +267,7 @@ const VendorNotifications = () => {
           >
             Next
           </button>
+
         </div>
       )}
     </div>
