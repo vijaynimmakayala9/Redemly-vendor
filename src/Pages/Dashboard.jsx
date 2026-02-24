@@ -540,7 +540,7 @@ const Dashboard = () => {
       </div>
 
       {/* Bottom Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-1 gap-4 sm:gap-6 mb-6">
 
         {/* ================= TOP COUPONS ================= */}
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
@@ -626,7 +626,7 @@ const Dashboard = () => {
 
         {/* ================= RECENT FEEDBACK ================= */}
         {/* API: data.feedback.recent[].{ _id, userId: { _id, name, profileImage }, tellUsAboutExperience, createdAt } */}
-        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+        {/* <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
           <div className="p-4 sm:p-6 border-b">
             <h3 className="text-lg font-bold text-gray-800">Recent Feedbacks</h3>
             <p className="text-gray-600 text-sm mt-1">Customer reviews</p>
@@ -675,7 +675,7 @@ const Dashboard = () => {
               </div>
             )}
           </div>
-        </div>
+        </div> */}
       </div>
 
       {/* Footer */}
