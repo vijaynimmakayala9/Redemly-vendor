@@ -266,10 +266,10 @@ const CouponHistoryTable = () => {
                     <td className="border px-3 py-2">{row.Customer_ID}</td>
                     <td className="border px-3 py-2 text-blue-600">{row.Coupon_ID}</td>
                     <td className="border px-3 py-2">{row.Discount}</td>
-                    <td className="border px-3 py-2">{row.Coupon_Download_Date}</td>
-                    <td className="border px-3 py-2">{row.Coupon_Redeemed_Date}</td>
-                    <td className="border px-3 py-2">{row.Coupon_Redeemed_Time}</td>
-                    <td className="border px-3 py-2">{row.Coupon_Order_Details || "-"}</td>
+                    <td className="border px-3 py-2">{row.Downloaded}</td>
+                    <td className="border px-3 py-2">{row.Redeemed_Date}</td>
+                    <td className="border px-3 py-2">{row.Redeemed_Time}</td>
+                    <td className="border px-3 py-2">{row.Order_Details || "N/A"}</td>
                     <td className="border px-3 py-2">{row.Order_Value}</td>
                     <td className="border px-3 py-2">{row.Feedback || "-"}</td>
                   </tr>
