@@ -202,14 +202,14 @@ const UploadDocuments = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          {renderUploadField("Aadhaar Card", "aadhaarCard", aadhaarRef)}
-          {renderUploadField("PAN Card", "panCard", panRef)}
-          {renderUploadField("GST Certificate", "gstCertificate", gstRef)}
-          {renderUploadField("Business License", "businessLicense", licenseRef)}
+          {renderUploadField("TIN Number", "aadhaarCard", aadhaarRef)}
+          {renderUploadField("State ID", "panCard", panRef)}
+          {renderUploadField("Driving License", "gstCertificate", gstRef)}
+          {renderUploadField("Business Certificate", "businessLicense", licenseRef)}
         </div>
 
         {/* File Preview Summary */}
-        {Object.values(formData).some(file => file !== null) && (
+        {/* {Object.values(formData).some(file => file !== null) && (
           <div className="mb-6 p-4 bg-gray-50 border border-gray-300 rounded-xl">
             <h3 className="font-medium text-gray-700 mb-2">Selected Files:</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -225,7 +225,7 @@ const UploadDocuments = () => {
               ))}
             </div>
           </div>
-        )}
+        )} */}
 
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 border-t border-gray-300">
