@@ -13,7 +13,9 @@ import {
   FaCoins,
   FaUsers,
   FaChartBar,
-  FaImage
+  FaImage,
+  FaUpload,
+  FaCamera
 } from "react-icons/fa";
 import { FiRefreshCw } from "react-icons/fi";
 
@@ -49,6 +51,11 @@ const VendorCoupons = () => {
     validityDate: "",
     couponCodeType: "%",
   });
+
+  // Image Upload States
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [imageUploadLoading, setImageUploadLoading] = useState(false);
+  const [imagePreview, setImagePreview] = useState(null);
 
   const [categories, setCategories] = useState([]);
 
@@ -114,12 +121,89 @@ const VendorCoupons = () => {
         : "",
       couponCodeType: coupon.couponCodeType || "%",
     });
+    setSelectedImage(null);
+    setImagePreview(coupon.couponImage || null);
     setEditModalOpen(true);
   };
 
   const handleEditChange = (e) => {
     const { name, value } = e.target;
     setEditForm({ ...editForm, [name]: value });
+  };
+
+  // ================= IMAGE UPLOAD HANDLERS =================
+  const handleImageChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        alert("Please select a valid image file (JPG, PNG, GIF, WebP)");
+        return;
+      }
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert("Image size should be less than 5MB");
+        return;
+      }
+      setSelectedImage(file);
+      // Create preview URL
+      const previewUrl = URL.createObjectURL(file);
+      setImagePreview(previewUrl);
+    }
+  };
+
+  const handleImageUpload = async () => {
+    if (!currentCoupon?._id || !selectedImage) return;
+
+    setImageUploadLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('couponImage', selectedImage);
+
+      const res = await axios.put(
+        `${API_BASE_URL}/update-coupon-image/${currentCoupon._id}`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        }
+      );
+
+      if (res.data.success || res.data.message || res.data.coupon) {
+        // Update local state with new image URL
+        const newImageUrl = res.data.coupon?.couponImage || res.data.imageUrl;
+        
+        setCoupons((prev) =>
+          prev.map((c) =>
+            c._id === currentCoupon._id
+              ? { ...c, couponImage: newImageUrl }
+              : c
+          )
+        );
+        
+        // Update currentCoupon state as well
+        setCurrentCoupon(prev => prev ? { ...prev, couponImage: newImageUrl } : null);
+        
+        // Update selectedCoupon if it's the same coupon being viewed
+        if (selectedCoupon?._id === currentCoupon._id) {
+          setSelectedCoupon(prev => prev ? { ...prev, couponImage: newImageUrl } : null);
+        }
+        
+        setSelectedImage(null);
+        // Reset file input
+        const fileInput = document.getElementById('coupon-image-input');
+        if (fileInput) fileInput.value = '';
+        alert("Coupon image updated successfully! ✅");
+      } else {
+        alert("Failed to update coupon image.");
+      }
+    } catch (error) {
+      console.error("Failed to upload coupon image:", error);
+      alert(error.response?.data?.message || "Error uploading image.");
+    } finally {
+      setImageUploadLoading(false);
+    }
   };
 
   const handleUpdateCoupon = async () => {
@@ -512,11 +596,17 @@ const VendorCoupons = () => {
             <div className="p-6">
               {/* Header with Image */}
               <div className="flex items-start gap-4 mb-6">
-                <img
-                  src={selectedCoupon.couponImage}
-                  alt={selectedCoupon.name}
-                  className="w-24 h-24 rounded-xl object-cover border border-gray-200"
-                />
+                {selectedCoupon.couponImage ? (
+                  <img
+                    src={selectedCoupon.couponImage}
+                    alt={selectedCoupon.name}
+                    className="w-24 h-24 rounded-xl object-cover border border-gray-200"
+                  />
+                ) : (
+                  <div className="w-24 h-24 rounded-xl bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-400">
+                    <FaImage className="text-2xl" />
+                  </div>
+                )}
                 <div>
                   <h4 className="text-2xl font-bold text-gray-900">{selectedCoupon.name}</h4>
                   <div className="flex items-center gap-2 mt-2">
@@ -670,6 +760,77 @@ const VendorCoupons = () => {
             </div>
 
             <div className="p-6 space-y-4">
+              {/* Coupon Image Upload Section */}
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                <label className="block text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+                  <FaImage /> Coupon Image
+                </label>
+                <div className="flex flex-col gap-3">
+                  {/* Image Preview */}
+                  <div className="flex items-center gap-4">
+                    <div className="relative">
+                      {imagePreview ? (
+                        <img
+                          src={imagePreview}
+                          alt="Coupon preview"
+                          className="w-20 h-20 rounded-xl object-cover border-2 border-blue-200"
+                        />
+                      ) : (
+                        <div className="w-20 h-20 rounded-xl bg-gray-200 border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400">
+                          <FaCamera className="text-xl" />
+                        </div>
+                      )}
+                      {imagePreview && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setImagePreview(null);
+                            setSelectedImage(null);
+                            const fileInput = document.getElementById('coupon-image-input');
+                            if (fileInput) fileInput.value = '';
+                          }}
+                          className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors shadow"
+                          title="Remove image"
+                        >
+                          <FaTimes className="text-xs" />
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <input
+                        id="coupon-image-input"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageChange}
+                        className="hidden"
+                      />
+                      <label
+                        htmlFor="coupon-image-input"
+                        className="inline-flex items-center gap-2 px-4 py-2 border border-dashed border-gray-300 rounded-lg text-sm text-gray-600 cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors"
+                      >
+                        <FaUpload />
+                        {selectedImage ? selectedImage.name : "Choose Image"}
+                      </label>
+                      <p className="text-xs text-gray-400 mt-1">
+                        Max 5MB • JPG, PNG, GIF, WebP
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* Upload Button */}
+                  {selectedImage && (
+                    <button
+                      onClick={handleImageUpload}
+                      disabled={imageUploadLoading}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                    >
+                      <FaUpload />
+                      {imageUploadLoading ? "Uploading..." : "Upload Image"}
+                    </button>
+                  )}
+                </div>
+              </div>
+
               {/* Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -686,7 +847,6 @@ const VendorCoupons = () => {
               </div>
 
               {/* Category */}
-              {/* CATEGORY SELECT */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Category
