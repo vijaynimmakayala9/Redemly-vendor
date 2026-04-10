@@ -1,135 +1,57 @@
-// import React from "react";
-
-// const CouponHistoryTable = () => {
-//  // Static coupon history data
-// const couponHistory = [
-//   {
-//     SI_No: 1,
-//     Customer_ID: "c685",
-//     Coupon_ID: "ROwETB",
-//     Discount: "10%",
-//     Coupon_Download_Date: "23-09-2025",
-//     Coupon_Redeemed_Date: "N/A",
-//     Coupon_Redeemed_Time: "N/A",
-//     Coupon_Order_Details: "N/A",
-//     Order_Value: "$0.00",
-//     Feedback: "N/A"
-//   },
-//   {
-//     SI_No: 2,
-//     Customer_ID: "c686",
-//     Coupon_ID: "Rowter",
-//     Discount: "15%",
-//     Coupon_Download_Date: "25-10-2025",
-//     Coupon_Redeemed_Date: "27-10-2025",
-//     Coupon_Redeemed_Time: "4:00pm",
-//     Coupon_Order_Details: "Rasmali Falooda, triple chocolate crepes, Mango milk tea",
-//     Order_Value: "$26",
-//     Feedback: "Falooda and milk tea were amazing, the crepe could have been better"
-//   },
-//   {
-//     SI_No: 3,
-//     Customer_ID: "c687",
-//     Coupon_ID: "Rowter",
-//     Discount: "15%",
-//     Coupon_Download_Date: "26-10-2025",
-//     Coupon_Redeemed_Date: "26-10-2025",
-//     Coupon_Redeemed_Time: "6:00pm",
-//     Coupon_Order_Details: "Mutton juicy mandi, Onion samosa, punogulu",
-//     Order_Value: "$50",
-//     Feedback: "Mandi was the best, snacks were cold"
-//   },
-//   {
-//     SI_No: 4,
-//     Customer_ID: "c687",
-//     Coupon_ID: "Rowter",
-//     Discount: "15%",
-//     Coupon_Download_Date: "26-10-2025",
-//     Coupon_Redeemed_Date: "27-10-2025",
-//     Coupon_Redeemed_Time: "7:00pm",
-//     Coupon_Order_Details: "3lb mutton, 5lb chicken",
-//     Order_Value: "$60",
-//     Feedback: ""
-//   }
-// ];
-
-//   return (
-//     <div className="p-6 bg-white min-h-screen">
-//       <div className="max-w-6xl mx-auto bg-white p-6 rounded-xl shadow-lg">
-//         <h2 className="text-2xl font-semibold mb-4 text-gray-700 text-center">
-//           Coupon Usage History
-//         </h2>
-
-//         <div className="overflow-x-auto">
-//           <table className="min-w-full border border-gray-200 text-sm">
-//             <thead className="bg-green-100 text-gray-600">
-//               <tr>
-//                 <th className="py-2 px-4 border">SI No</th>
-//                 <th className="py-2 px-4 border">Customer ID</th>
-//                 <th className="py-2 px-4 border">Coupon ID</th>
-//                 <th className="py-2 px-4 border">Discount</th>
-//                 <th className="py-2 px-4 border">Coupon Download Date</th>
-//                 <th className="py-2 px-4 border">Coupon Redeemed Date</th>
-//                 <th className="py-2 px-4 border">Coupon Redeemed Time</th>
-//                 <th className="py-2 px-4 border">Coupon Order Details</th>
-//                 <th className="py-2 px-4 border">Order Value</th>
-//                 <th className="py-2 px-4 border">Feedback</th>
-//               </tr>
-//             </thead>
-//             <tbody>
-//               {couponHistory.length === 0 ? (
-//                 <tr>
-//                   <td colSpan="10" className="py-4 text-gray-500 text-center">
-//                     No coupon usage history found.
-//                   </td>
-//                 </tr>
-//               ) : (
-//                 couponHistory.map((coupon, index) => (
-//                   <tr key={coupon.Coupon_ID + index} className="text-center">
-//                     <td className="py-2 px-4 border">{coupon.SI_No || index + 1}</td>
-//                     <td className="py-2 px-4 border">{coupon.Customer_ID}</td>
-//                     <td className="py-2 px-4 border">{coupon.Coupon_ID}</td>
-//                     <td className="py-2 px-4 border">{coupon.Discount}</td>
-//                     <td className="py-2 px-4 border">{coupon.Coupon_Download_Date}</td>
-//                     <td className="py-2 px-4 border">{coupon.Coupon_Redeemed_Date}</td>
-//                     <td className="py-2 px-4 border">{coupon.Coupon_Redeemed_Time}</td>
-//                     <td className="py-2 px-4 border">{coupon.Coupon_Order_Details}</td>
-//                     <td className="py-2 px-4 border">{coupon.Order_Value}</td>
-//                     <td className="py-2 px-4 border">{coupon.Feedback || "-"}</td>
-//                   </tr>
-//                 ))
-//               )}
-//             </tbody>
-//           </table>
-//         </div>
-//       </div>
-//     </div>
-//   );
-// };
-
-// export default CouponHistoryTable;
-
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import axios from "axios";
 
 const PAGE_SIZE = 10;
+
+const escapeCSV = (val) => `"${String(val ?? "").replace(/"/g, '""')}"`;
+
+const formatToUSTime = (dateStr, timeStr) => {
+  try {
+    if (!timeStr || timeStr === "N/A") return "N/A";
+    const combined = `${dateStr} ${timeStr} GMT+0530`;
+    const date = new Date(combined);
+    if (isNaN(date)) return timeStr;
+    return date.toLocaleTimeString("en-US", {
+      timeZone: "America/New_York",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+  } catch {
+    return timeStr;
+  }
+};
+
+const getPageNumbers = (currentPage, totalPages) => {
+  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+  if (currentPage <= 4) return [1, 2, 3, 4, 5, "...", totalPages];
+  if (currentPage >= totalPages - 3)
+    return [1, "...", totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+  return [1, "...", currentPage - 1, currentPage, currentPage + 1, "...", totalPages];
+};
+
+const Skeleton = () => (
+  <div style={{ padding: "1rem" }}>
+    {[...Array(5)].map((_, i) => (
+      <div key={i} style={{ height: 38, background: "#f3f4f6", borderRadius: 8, marginBottom: 10, animation: "pulse 1.5s infinite" }} />
+    ))}
+    <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}`}</style>
+  </div>
+);
 
 const CouponHistoryTable = () => {
   const vendorId = localStorage.getItem("vendorId");
 
   const [loading, setLoading] = useState(true);
   const [history, setHistory] = useState([]);
-  const [filteredHistory, setFilteredHistory] = useState([]);
-
   const [currentPage, setCurrentPage] = useState(1);
+  const [expandedRow, setExpandedRow] = useState(null);
 
-  // Filters
   const [customerId, setCustomerId] = useState("");
   const [couponId, setCouponId] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
 
-  // ================= FETCH API =================
   const fetchHistory = async () => {
     try {
       setLoading(true);
@@ -137,7 +59,6 @@ const CouponHistoryTable = () => {
         `https://api.redemly.com/api/vendor/coupon-usage-history/${vendorId}`
       );
       setHistory(res.data.history || []);
-      setFilteredHistory(res.data.history || []);
     } catch (err) {
       console.error("Failed to fetch coupon history", err);
     } finally {
@@ -149,164 +70,314 @@ const CouponHistoryTable = () => {
     if (vendorId) fetchHistory();
   }, [vendorId]);
 
-  // ================= FILTER =================
-  useEffect(() => {
+  const filteredHistory = useMemo(() => {
     let data = [...history];
-
     if (customerId)
-      data = data.filter((d) =>
-        d.Customer_ID?.toLowerCase().includes(customerId.toLowerCase())
-      );
-
+      data = data.filter((d) => d.Customer_ID?.toLowerCase().includes(customerId.toLowerCase()));
     if (couponId)
-      data = data.filter((d) =>
-        d.Coupon_ID?.toLowerCase().includes(couponId.toLowerCase())
-      );
-
+      data = data.filter((d) => d.Coupon_ID?.toLowerCase().includes(couponId.toLowerCase()));
     if (fromDate)
-      data = data.filter(
-        (d) => new Date(d.Coupon_Download_Date) >= new Date(fromDate)
-      );
-
+      data = data.filter((d) => new Date(d.Downloaded) >= new Date(fromDate));
     if (toDate)
-      data = data.filter(
-        (d) => new Date(d.Coupon_Download_Date) <= new Date(toDate)
-      );
+      data = data.filter((d) => new Date(d.Downloaded) <= new Date(toDate));
+    return data;
+  }, [history, customerId, couponId, fromDate, toDate]);
 
-    setFilteredHistory(data);
-    setCurrentPage(1); // reset page on filter change
-  }, [customerId, couponId, fromDate, toDate, history]);
+  // Reset page when filters change
+  useEffect(() => { setCurrentPage(1); }, [customerId, couponId, fromDate, toDate]);
 
-  // ================= PAGINATION =================
   const totalPages = Math.ceil(filteredHistory.length / PAGE_SIZE);
-
   const paginatedData = filteredHistory.slice(
     (currentPage - 1) * PAGE_SIZE,
     currentPage * PAGE_SIZE
   );
+  const pageNumbers = getPageNumbers(currentPage, totalPages);
 
-  // ================= EXPORT CSV =================
   const exportCSV = () => {
     if (!filteredHistory.length) return;
-
-    const headers = Object.keys(filteredHistory[0]).join(",");
+    const headers = [
+      "SI No", "Customer ID", "Coupon ID", "Discount",
+      "Download Date", "Redeemed Date", "Redeemed Time (ET)",
+      "Order Details", "Order Value", "Feedback",
+    ];
     const rows = filteredHistory.map((row) =>
-      Object.values(row)
-        .map((v) => `"${v ?? ""}"`)
-        .join(",")
+      [
+        row.SI_No, row.Customer_ID, row.Coupon_ID, row.Discount,
+        row.Downloaded, row.Redeemed_Date,
+        formatToUSTime(row.Redeemed_Date, row.Redeemed_Time),
+        row.Order_Details, row.Order_Value, row.Feedback,
+      ].map(escapeCSV)
     );
-
-    const csv = [headers, ...rows].join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
+    const csv = [headers.map(escapeCSV).join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
-
     const a = document.createElement("a");
     a.href = url;
     a.download = "coupon-usage-history.csv";
     a.click();
+    URL.revokeObjectURL(url);
   };
 
-  // ================= UI =================
+  const inputStyle = {
+    border: "1px solid #d1d5db",
+    padding: "7px 11px",
+    borderRadius: 8,
+    fontSize: 13,
+    outline: "none",
+    width: "100%",
+    boxSizing: "border-box",
+    background: "#fff",
+    color: "#111827",
+  };
+
+  const btnPrimary = {
+    padding: "7px 16px",
+    background: "#1d4ed8",
+    color: "#fff",
+    border: "none",
+    borderRadius: 8,
+    fontSize: 13,
+    fontWeight: 500,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  };
+
+  const thStyle = {
+    padding: "9px 8px",
+    textAlign: "left",
+    fontWeight: 500,
+    whiteSpace: "nowrap",
+    fontSize: 12,
+    borderBottom: "2px solid #1e40af",
+  };
+
+  const tdStyle = {
+    padding: "8px",
+    fontSize: 12,
+    borderBottom: "1px solid #e5e7eb",
+    verticalAlign: "middle",
+  };
+
   return (
-    <div className="p-6 min-h-screen bg-gradient-to-br from-blue-50 to-white">
-      <div className="max-w-7xl mx-auto bg-white rounded-2xl shadow-xl p-6">
+    <div style={{ padding: "1rem", maxWidth: 1200, margin: "0 auto", fontFamily: "sans-serif" }}>
 
-        {/* HEADER */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
-          <h2 className="text-2xl font-bold text-blue-700">
-            Coupon Usage History
-          </h2>
-
-          <button
-            onClick={exportCSV}
-            className="mt-3 md:mt-0 px-5 py-2 rounded-lg text-white font-medium bg-blue-600"
-          >
-            Export CSV
-          </button>
+      {/* Header */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem" }}>
+        <div>
+          <h2 style={{ fontSize: 20, fontWeight: 700, color: "#1d4ed8", margin: 0 }}>Coupon Usage History</h2>
+          <p style={{ fontSize: 13, color: "#6b7280", margin: "3px 0 0" }}>
+            {filteredHistory.length} record{filteredHistory.length !== 1 ? "s" : ""}
+          </p>
         </div>
-
-        {/* FILTERS */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <input placeholder="Customer ID" value={customerId}
-            onChange={(e)=>setCustomerId(e.target.value)}
-            className="border p-2 rounded-lg"/>
-
-          <input placeholder="Coupon ID" value={couponId}
-            onChange={(e)=>setCouponId(e.target.value)}
-            className="border p-2 rounded-lg"/>
-
-          <input type="date" value={fromDate}
-            onChange={(e)=>setFromDate(e.target.value)}
-            className="border p-2 rounded-lg"/>
-
-          <input type="date" value={toDate}
-            onChange={(e)=>setToDate(e.target.value)}
-            className="border p-2 rounded-lg"/>
-        </div>
-
-        {/* TABLE */}
-        <div className="overflow-x-auto">
-          <table className="min-w-full border text-sm">
-            <thead className="bg-blue-100">
-              <tr>
-                {["SI No","Customer ID","Coupon ID","Discount","Downloaded","Redeemed Date","Redeemed Time","Order Details","Order Value","Feedback"]
-                  .map(h=>(<th key={h} className="px-4 py-2 border">{h}</th>))}
-              </tr>
-            </thead>
-
-            <tbody>
-              {loading ? (
-                <tr><td colSpan="10" className="text-center py-6">Loading...</td></tr>
-              ) : paginatedData.length === 0 ? (
-                <tr><td colSpan="10" className="text-center py-6">No data found</td></tr>
-              ) : (
-                paginatedData.map((row, idx) => (
-                  <tr key={idx} className="text-center hover:bg-blue-50">
-                    <td className="border px-3 py-2">{row.SI_No}</td>
-                    <td className="border px-3 py-2">{row.Customer_ID}</td>
-                    <td className="border px-3 py-2 text-blue-600">{row.Coupon_ID}</td>
-                    <td className="border px-3 py-2">{row.Discount}</td>
-                    <td className="border px-3 py-2">{row.Downloaded}</td>
-                    <td className="border px-3 py-2">{row.Redeemed_Date}</td>
-                    <td className="border px-3 py-2">{row.Redeemed_Time}</td>
-                    <td className="border px-3 py-2">{row.Order_Details || "N/A"}</td>
-                    <td className="border px-3 py-2">{row.Order_Value}</td>
-                    <td className="border px-3 py-2">{row.Feedback || "-"}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* PAGINATION */}
-        {totalPages > 1 && (
-          <div className="flex justify-between items-center mt-6">
-            <p className="text-sm text-gray-600">
-              Page {currentPage} of {totalPages}
-            </p>
-
-            <div className="flex gap-2">
-              <button
-                disabled={currentPage === 1}
-                onClick={()=>setCurrentPage(p=>p-1)}
-                className="px-4 py-2 border rounded disabled:opacity-40"
-              >
-                Prev
-              </button>
-
-              <button
-                disabled={currentPage === totalPages}
-                onClick={()=>setCurrentPage(p=>p+1)}
-                className="px-4 py-2 border rounded disabled:opacity-40"
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        )}
-
+        <button onClick={exportCSV} style={btnPrimary}>↓ Export CSV</button>
       </div>
+
+      {/* Filters */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: "1.25rem" }}>
+        <input
+          style={inputStyle}
+          placeholder="Search Customer ID"
+          value={customerId}
+          onChange={(e) => setCustomerId(e.target.value)}
+        />
+        <input
+          style={inputStyle}
+          placeholder="Search Coupon ID"
+          value={couponId}
+          onChange={(e) => setCouponId(e.target.value)}
+        />
+        <input
+          type="date"
+          style={inputStyle}
+          value={fromDate}
+          onChange={(e) => setFromDate(e.target.value)}
+          title="From Date"
+        />
+        <input
+          type="date"
+          style={inputStyle}
+          value={toDate}
+          onChange={(e) => setToDate(e.target.value)}
+          title="To Date"
+        />
+        {(customerId || couponId || fromDate || toDate) && (
+          <button
+            onClick={() => { setCustomerId(""); setCouponId(""); setFromDate(""); setToDate(""); }}
+            style={{ ...inputStyle, background: "#f3f4f6", cursor: "pointer", color: "#374151", border: "1px solid #d1d5db", width: "auto" }}
+          >
+            ✕ Clear
+          </button>
+        )}
+      </div>
+
+      {/* Desktop Table */}
+      <div className="dt-table" style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 860 }}>
+          <thead>
+            <tr style={{ background: "#1d4ed8", color: "#fff" }}>
+              {["#", "Customer ID", "Coupon ID", "Discount", "Downloaded", "Redeemed Date", "Redeemed Time (ET)", "Order Details", "Value", "Feedback"].map((h) => (
+                <th key={h} style={thStyle}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={10} style={{ padding: "2rem", textAlign: "center" }}><Skeleton /></td></tr>
+            ) : paginatedData.length === 0 ? (
+              <tr><td colSpan={10} style={{ padding: "2rem", textAlign: "center", color: "#9ca3af" }}>No records found</td></tr>
+            ) : (
+              paginatedData.map((row, idx) => (
+                <tr
+                  key={idx}
+                  style={{ background: idx % 2 === 0 ? "#fff" : "#f9fafb", transition: "background 0.15s" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "#eff6ff")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = idx % 2 === 0 ? "#fff" : "#f9fafb")}
+                >
+                  <td style={{ ...tdStyle, color: "#9ca3af" }}>{row.SI_No}</td>
+                  <td style={tdStyle}>{row.Customer_ID}</td>
+                  <td style={{ ...tdStyle, color: "#4f46e5", fontFamily: "monospace", fontWeight: 600 }}>{row.Coupon_ID}</td>
+                  <td style={tdStyle}>
+                    <span style={{ background: "#dbeafe", color: "#1d4ed8", fontSize: 11, padding: "2px 7px", borderRadius: 999, fontWeight: 500 }}>
+                      {row.Discount}
+                    </span>
+                  </td>
+                  <td style={{ ...tdStyle, color: "#6b7280", whiteSpace: "nowrap" }}>{row.Downloaded}</td>
+                  <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>{row.Redeemed_Date}</td>
+                  <td style={{ ...tdStyle, whiteSpace: "nowrap", fontWeight: 500 }}>
+                    {formatToUSTime(row.Redeemed_Date, row.Redeemed_Time)}
+                  </td>
+                  <td style={{ ...tdStyle, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {row.Order_Details || "N/A"}
+                  </td>
+                  <td style={{ ...tdStyle, fontWeight: 600 }}>{row.Order_Value}</td>
+                  <td style={{ ...tdStyle, maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#6b7280" }}>
+                    {row.Feedback || "—"}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Mobile Cards */}
+      <div className="mc-cards">
+        {loading ? (
+          <Skeleton />
+        ) : paginatedData.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "2rem", color: "#9ca3af" }}>No records found</div>
+        ) : (
+          paginatedData.map((row, idx) => (
+            <div key={idx} style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 14, marginBottom: 12, background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+
+              {/* Card top */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: "#111827" }}>{row.Customer_ID}</div>
+                  <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>SI #{row.SI_No}</div>
+                </div>
+                <span style={{ background: "#dbeafe", color: "#1d4ed8", fontSize: 12, padding: "3px 9px", borderRadius: 999, fontWeight: 600 }}>
+                  {row.Discount}
+                </span>
+              </div>
+
+              {/* Coupon code */}
+              <div style={{ background: "#f5f3ff", border: "1px dashed #a78bfa", borderRadius: 6, padding: "6px 10px", marginBottom: 10, display: "flex", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 11, color: "#7c3aed", fontWeight: 500 }}>Coupon ID</span>
+                <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#4f46e5", fontSize: 13 }}>{row.Coupon_ID}</span>
+              </div>
+
+              {/* Grid */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 12px", fontSize: 12 }}>
+                {[
+                  ["Downloaded", row.Downloaded],
+                  ["Redeemed Date", row.Redeemed_Date],
+                  ["Redeemed Time (ET)", formatToUSTime(row.Redeemed_Date, row.Redeemed_Time)],
+                  ["Order Value", row.Order_Value],
+                ].map(([label, val]) => (
+                  <div key={label}>
+                    <div style={{ color: "#9ca3af", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
+                    <div style={{ color: "#111827", fontWeight: 500, marginTop: 1 }}>{val || "N/A"}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Expandable order + feedback */}
+              {(row.Order_Details || row.Feedback) && (
+                <div style={{ marginTop: 10, borderTop: "1px solid #f3f4f6", paddingTop: 8 }}>
+                  <button
+                    onClick={() => setExpandedRow(expandedRow === idx ? null : idx)}
+                    style={{ background: "none", border: "none", fontSize: 12, color: "#1d4ed8", cursor: "pointer", padding: 0 }}
+                  >
+                    {expandedRow === idx ? "▲ Hide details" : "▼ Order & feedback"}
+                  </button>
+                  {expandedRow === idx && (
+                    <div style={{ marginTop: 8, fontSize: 12, color: "#374151", lineHeight: 1.6 }}>
+                      {row.Order_Details && row.Order_Details !== "N/A" && (
+                        <div style={{ marginBottom: 5 }}><span style={{ fontWeight: 500 }}>Order: </span>{row.Order_Details}</div>
+                      )}
+                      {row.Feedback && (
+                        <div><span style={{ fontWeight: 500 }}>Feedback: </span>{row.Feedback}</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Responsive switch */}
+      <style>{`
+        .dt-table { display: block; }
+        .mc-cards { display: none; }
+        @media (max-width: 767px) {
+          .dt-table { display: none; }
+          .mc-cards { display: block; }
+        }
+      `}</style>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <>
+          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 4, marginTop: "1.25rem", flexWrap: "wrap" }}>
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+              disabled={currentPage === 1}
+              style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid #d1d5db", background: currentPage === 1 ? "#f9fafb" : "#fff", color: currentPage === 1 ? "#9ca3af" : "#374151", cursor: currentPage === 1 ? "not-allowed" : "pointer", fontSize: 13 }}
+            >
+              ← Prev
+            </button>
+
+            {pageNumbers.map((p, i) =>
+              p === "..." ? (
+                <span key={`e${i}`} style={{ padding: "5px 4px", color: "#9ca3af", fontSize: 13, userSelect: "none" }}>…</span>
+              ) : (
+                <button
+                  key={p}
+                  onClick={() => setCurrentPage(p)}
+                  style={{ padding: "5px 10px", borderRadius: 6, minWidth: 32, border: currentPage === p ? "1px solid #1d4ed8" : "1px solid #d1d5db", background: currentPage === p ? "#1d4ed8" : "#fff", color: currentPage === p ? "#fff" : "#374151", fontWeight: currentPage === p ? 600 : 400, cursor: "pointer", fontSize: 13 }}
+                >
+                  {p}
+                </button>
+              )
+            )}
+
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid #d1d5db", background: currentPage === totalPages ? "#f9fafb" : "#fff", color: currentPage === totalPages ? "#9ca3af" : "#374151", cursor: currentPage === totalPages ? "not-allowed" : "pointer", fontSize: 13 }}
+            >
+              Next →
+            </button>
+          </div>
+
+          <div style={{ textAlign: "center", fontSize: 12, color: "#9ca3af", marginTop: 6 }}>
+            Page {currentPage} of {totalPages} · Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filteredHistory.length)} of {filteredHistory.length}
+          </div>
+        </>
+      )}
     </div>
   );
 };
