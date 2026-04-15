@@ -8,11 +8,14 @@ const escapeCSV = (val) => `"${String(val ?? "").replace(/"/g, '""')}"`;
 const formatToUSTime = (dateStr, timeStr) => {
   try {
     if (!timeStr || timeStr === "N/A") return "N/A";
-    const combined = `${dateStr} ${timeStr} GMT+0530`;
+
+    const combined = `${dateStr} ${timeStr} GMT+0530`; // IST
     const date = new Date(combined);
+
     if (isNaN(date)) return timeStr;
+
     return date.toLocaleTimeString("en-US", {
-      timeZone: "America/New_York",
+      timeZone: "America/Chicago", // ✅ CST/CDT
       hour: "2-digit",
       minute: "2-digit",
       hour12: true,
@@ -97,7 +100,7 @@ const CouponHistoryTable = () => {
     if (!filteredHistory.length) return;
     const headers = [
       "SI No", "Customer ID", "Coupon ID", "Discount",
-      "Download Date", "Redeemed Date", "Redeemed Time (ET)",
+      "Download Date", "Redeemed Date", "Redeemed Time (CST)",
       "Order Details", "Order Value", "Feedback",
     ];
     const rows = filteredHistory.map((row) =>
@@ -215,7 +218,7 @@ const CouponHistoryTable = () => {
         <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 860 }}>
           <thead>
             <tr style={{ background: "#1d4ed8", color: "#fff" }}>
-              {["#", "Customer ID", "Coupon ID", "Discount", "Downloaded", "Redeemed Date", "Redeemed Time (ET)", "Order Details", "Value", "Feedback"].map((h) => (
+              {["#", "Customer ID", "Coupon ID", "Discount", "Downloaded", "Redeemed Date", "Redeemed Time (CST)", "Order Details", "Value", "Feedback"].map((h) => (
                 <th key={h} style={thStyle}>{h}</th>
               ))}
             </tr>
@@ -292,7 +295,7 @@ const CouponHistoryTable = () => {
                 {[
                   ["Downloaded", row.Downloaded],
                   ["Redeemed Date", row.Redeemed_Date],
-                  ["Redeemed Time (ET)", formatToUSTime(row.Redeemed_Date, row.Redeemed_Time)],
+                  ["Redeemed Time (CST)", formatToUSTime(row.Redeemed_Date, row.Redeemed_Time)],
                   ["Order Value", row.Order_Value],
                 ].map(([label, val]) => (
                   <div key={label}>

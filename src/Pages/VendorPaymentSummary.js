@@ -1016,7 +1016,7 @@ export default function VendorPaymentSummary() {
                   <tr>
                     <th className="p-3 text-center">S No</th>
                     <th className="p-3 text-left">Coupon</th>
-                    <th className="p-3 text-left">User</th>
+                    <th className="p-3 text-left">UserId</th>
                     <th className="p-3 text-center">Amount ($)</th>
                     <th className="p-3 text-center">Month</th>
                     <th className="p-3 text-center">Claimed At</th>
@@ -1034,9 +1034,9 @@ export default function VendorPaymentSummary() {
                           <div className="text-xs text-gray-400">{claim.couponCode}</div>
                         </td>
                         <td className="p-3">
-                          <div className="font-medium">{claim.user?.name}</div>
-                          <div className="text-xs text-gray-400">{claim.user?.email}</div>
-                          <div className="text-xs text-gray-400">{claim.user?.phone}</div>
+                          <div className="font-medium">{claim.user?.id}</div>
+                          {/* <div className="text-xs text-gray-400">{claim.user?.email}</div>
+                          <div className="text-xs text-gray-400">{claim.user?.phone}</div> */}
                         </td>
                         <td className="p-3 text-center font-semibold">${claim.amount}</td>
                         <td className="p-3 text-center">{formattedMonth}</td>
