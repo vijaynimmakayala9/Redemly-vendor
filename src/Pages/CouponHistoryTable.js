@@ -5,26 +5,6 @@ const PAGE_SIZE = 10;
 
 const escapeCSV = (val) => `"${String(val ?? "").replace(/"/g, '""')}"`;
 
-const formatToUSTime = (dateStr, timeStr) => {
-  try {
-    if (!timeStr || timeStr === "N/A") return "N/A";
-
-    const combined = `${dateStr} ${timeStr} GMT+0530`; // IST
-    const date = new Date(combined);
-
-    if (isNaN(date)) return timeStr;
-
-    return date.toLocaleTimeString("en-US", {
-      timeZone: "America/Chicago", // ✅ CST/CDT
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    });
-  } catch {
-    return timeStr;
-  }
-};
-
 const getPageNumbers = (currentPage, totalPages) => {
   if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
   if (currentPage <= 4) return [1, 2, 3, 4, 5, "...", totalPages];
@@ -100,14 +80,14 @@ const CouponHistoryTable = () => {
     if (!filteredHistory.length) return;
     const headers = [
       "SI No", "Customer ID", "Coupon ID", "Discount",
-      "Download Date", "Redeemed Date", "Redeemed Time (CST)",
+      "Download Date", "Redeemed Date", "Redeemed Time",
       "Order Details", "Order Value", "Feedback",
     ];
     const rows = filteredHistory.map((row) =>
       [
         row.SI_No, row.Customer_ID, row.Coupon_ID, row.Discount,
         row.Downloaded, row.Redeemed_Date,
-        formatToUSTime(row.Redeemed_Date, row.Redeemed_Time),
+        row.Redeemed_Time,
         row.Order_Details, row.Order_Value, row.Feedback,
       ].map(escapeCSV)
     );
@@ -218,7 +198,7 @@ const CouponHistoryTable = () => {
         <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 860 }}>
           <thead>
             <tr style={{ background: "#1d4ed8", color: "#fff" }}>
-              {["#", "Customer ID", "Coupon ID", "Discount", "Downloaded", "Redeemed Date", "Redeemed Time (CST)", "Order Details", "Value", "Feedback"].map((h) => (
+              {["#", "Customer ID", "Coupon ID", "Discount", "Downloaded", "Redeemed Date", "Redeemed Time", "Order Details", "Value", "Feedback"].map((h) => (
                 <th key={h} style={thStyle}>{h}</th>
               ))}
             </tr>
@@ -247,7 +227,7 @@ const CouponHistoryTable = () => {
                   <td style={{ ...tdStyle, color: "#6b7280", whiteSpace: "nowrap" }}>{row.Downloaded}</td>
                   <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>{row.Redeemed_Date}</td>
                   <td style={{ ...tdStyle, whiteSpace: "nowrap", fontWeight: 500 }}>
-                    {formatToUSTime(row.Redeemed_Date, row.Redeemed_Time)}
+                    {row.Redeemed_Time}
                   </td>
                   <td style={{ ...tdStyle, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {row.Order_Details || "N/A"}
@@ -295,7 +275,7 @@ const CouponHistoryTable = () => {
                 {[
                   ["Downloaded", row.Downloaded],
                   ["Redeemed Date", row.Redeemed_Date],
-                  ["Redeemed Time (CST)", formatToUSTime(row.Redeemed_Date, row.Redeemed_Time)],
+                  ["Redeemed Time", row.Redeemed_Time],
                   ["Order Value", row.Order_Value],
                 ].map(([label, val]) => (
                   <div key={label}>
