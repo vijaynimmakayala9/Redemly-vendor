@@ -11,7 +11,6 @@ export default function AdminLayout({ children }) {
     const handleResize = () => {
       const mobile = window.innerWidth <= 768;
       setIsMobile(mobile);
-      // Auto-collapse sidebar on mobile initially
       if (mobile) {
         setIsCollapsed(true);
       } else {
@@ -19,14 +18,11 @@ export default function AdminLayout({ children }) {
       }
     };
 
-    // Initial check
     handleResize();
-
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Handle click outside sidebar on mobile
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (
@@ -34,7 +30,7 @@ export default function AdminLayout({ children }) {
         !isCollapsed && 
         sidebarRef.current && 
         !sidebarRef.current.contains(event.target) &&
-        !event.target.closest('.navbar-toggle-button') // Don't close if clicking toggle button
+        !event.target.closest('.navbar-toggle-button')
       ) {
         setIsCollapsed(true);
       }
@@ -49,7 +45,6 @@ export default function AdminLayout({ children }) {
     };
   }, [isMobile, isCollapsed]);
 
-  // Prevent body scroll when sidebar is open on mobile
   useEffect(() => {
     if (isMobile && !isCollapsed) {
       document.body.style.overflow = 'hidden';
@@ -67,17 +62,28 @@ export default function AdminLayout({ children }) {
   };
 
   return (
-    <div className="flex h-screen relative overflow-hidden">
+    // 1. Added w-full and screen bounds to the wrapper
+    <div className="flex h-screen w-full relative overflow-hidden bg-[#EFF0F1]">
+      
       {/* Overlay for mobile */}
       {isMobile && !isCollapsed && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity duration-300"
+          className="fixed inset-0 bg-black/50 z-40 transition-opacity duration-300"
           onClick={() => setIsCollapsed(true)}
         />
       )}
 
-      {/* Sidebar */}
-      <div ref={sidebarRef}>
+      {/* Sidebar Wrapper: 
+          On Desktop, it needs a fixed or transition width so the content knows how to shrink.
+          On Mobile, it should be fixed/absolute to not push the layout. */}
+      <div 
+        ref={sidebarRef}
+        className={`transition-all duration-300 ease-in-out z-50 ${
+          isMobile 
+            ? "fixed inset-y-0 left-0" 
+            : (isCollapsed ? "w-20" : "w-64")
+        }`}
+      >
         <Sidebar 
           isCollapsed={isCollapsed} 
           isMobile={isMobile} 
@@ -85,8 +91,11 @@ export default function AdminLayout({ children }) {
         />
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col transition-all duration-300 w-full">
+      {/* Main Content:
+          2. Added min-w-0: This is the critical fix for overflow. 
+          3. Added h-full and w-full to ensure it respects the parent bounds. */}
+      <div className="flex-1 flex flex-col min-w-0 w-full h-full transition-all duration-300">
+        
         {/* Navbar */}
         <Navbar 
           setIsCollapsed={setIsCollapsed} 
@@ -95,10 +104,11 @@ export default function AdminLayout({ children }) {
           toggleSidebar={toggleSidebar}
         />
         
-        {/* Page Content */}
-        <div className="p-3 sm:p-4 md:p-6 overflow-y-auto bg-[#EFF0F1] flex-1">
+        {/* Page Content:
+            4. overflow-x-hidden ensures no horizontal scroll on the content itself. */}
+        <main className="p-3 sm:p-4 md:p-6 overflow-y-auto overflow-x-hidden flex-1">
           {children}
-        </div>
+        </main>
       </div>
     </div>
   );
